@@ -4,7 +4,11 @@ import { join } from "path";
 import { existsSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
 
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
+// On Render (or any host with a persistent disk), set UPLOAD_DIR env var to
+// the mount path (e.g. /var/data/uploads) so files survive redeployments.
+// Falls back to public/uploads for local dev.
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ?? join(process.cwd(), "public", "uploads");
 
 async function ensureUploadDir(subDir: string) {
   const dir = join(UPLOAD_DIR, subDir);

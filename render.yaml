@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: capixelate
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm start
+    healthCheckPath: /api/healthcheck
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:/var/data/capixelate.db
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Set this to your Render public URL after first deploy:
+      # - key: NEXT_PUBLIC_API_BASE_URL
+      #   value: https://capixelate.onrender.com
+    disk:
+      name: capixelate-data
+      mountPath: /var/data
+      sizeGB: 1
