@@ -4,9 +4,10 @@ import { join } from "path";
 import { existsSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
 
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ?? join(process.cwd(), "public", "uploads");
 
-async function ensureUploadDir(subDir: string) {
+async function ensureDir(subDir: string) {
   const dir = join(UPLOAD_DIR, subDir);
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
@@ -29,10 +30,12 @@ export async function POST(req: NextRequest) {
 
     const ext = file.name.split(".").pop() ?? "bin";
     const filename = `${uuidv4()}.${ext}`;
-    const dir = await ensureUploadDir(category);
+    const dir = await ensureDir(category);
     await writeFile(join(dir, filename), buffer);
 
-    const url = `/uploads/${category}/${filename}`;
+    // Return a path served by /api/files/. The frontend prefixes with
+    // NEXT_PUBLIC_API_BASE_URL so it resolves correctly across origins.
+    const url = `/api/files/${category}/${filename}`;
     return NextResponse.json({ url, filename, originalName: file.name });
   } catch (err) {
     console.error("Upload error:", err);

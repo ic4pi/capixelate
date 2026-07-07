@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   waterVertexShader,
   waterFragmentShader,
@@ -41,14 +42,22 @@ export class GameEngine {
   foggyTiles: Set<string> = new Set();
   windIndicator?: THREE.ArrowHelper;
   private frameCount = 0;
+  private gltfLoader = new GLTFLoader();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
+  private loadGLB(url: string): Promise<THREE.Group> {
+    return new Promise((resolve, reject) => {
+      this.gltfLoader.load(url, (gltf) => resolve(gltf.scene), undefined, reject);
+    });
+  }
+
   async init(
     islandsData: IslandState[],
-    enemiesData: EnemyState[]
+    enemiesData: EnemyState[],
+    playerShipModelUrl?: string
   ) {
     this.initRenderer();
     this.initScene();
@@ -57,7 +66,7 @@ export class GameEngine {
     this.initSky();
     this.initStars();
     this.initWater();
-    this.initPlayerShip();
+    this.initPlayerShip(playerShipModelUrl);
     this.initGameState(islandsData, enemiesData);
     this.initInputHandlers();
     islandsData.forEach((isl) => this.spawnIsland(isl));
@@ -218,7 +227,7 @@ export class GameEngine {
     this.scene.add(this.water);
   }
 
-  private initPlayerShip() {
+  private initPlayerShip(modelUrl?: string) {
     this.playerShip = new THREE.Group();
 
     // Hull
@@ -321,6 +330,21 @@ export class GameEngine {
     // Camera follows ship
     this.camera.position.set(0, 12, 28);
     this.camera.lookAt(0, 0, 0);
+
+    if (modelUrl) {
+      this.loadGLB(modelUrl)
+        .then((model) => {
+          // Replace all procedural children with the loaded GLB
+          while (this.playerShip.children.length > 0) {
+            this.playerShip.remove(this.playerShip.children[0]);
+          }
+          model.name = "customPlayerShip";
+          this.playerShip.add(model);
+        })
+        .catch(() => {
+          // Keep procedural geometry on failure
+        });
+    }
   }
 
   private initGameState(islands: IslandState[], enemies: EnemyState[]) {
@@ -411,10 +435,10 @@ export class GameEngine {
   private _keyDown?: (e: KeyboardEvent) => void;
   private _keyUp?: (e: KeyboardEvent) => void;
 
-  spawnIsland(island: IslandState) {
-    const group = new THREE.Group();
+  private buildProceduralIslandTerrain(island: IslandState): THREE.Group {
+    const terrain = new THREE.Group();
+    terrain.name = "terrain";
 
-    // Base island landmass
     const islandGeo = new THREE.CylinderGeometry(
       island.scale * 18,
       island.scale * 22,
@@ -427,9 +451,8 @@ export class GameEngine {
     islandMesh.position.y = -1;
     islandMesh.castShadow = true;
     islandMesh.receiveShadow = true;
-    group.add(islandMesh);
+    terrain.add(islandMesh);
 
-    // Sandy beach ring
     const beachGeo = new THREE.CylinderGeometry(
       island.scale * 22,
       island.scale * 24,
@@ -439,9 +462,8 @@ export class GameEngine {
     const beachMat = new THREE.MeshLambertMaterial({ color: 0xd4b483 });
     const beach = new THREE.Mesh(beachGeo, beachMat);
     beach.position.y = -3.5;
-    group.add(beach);
+    terrain.add(beach);
 
-    // Trees
     for (let i = 0; i < 7; i++) {
       const angle = (i / 7) * Math.PI * 2;
       const r = island.scale * (8 + Math.random() * 5);
@@ -459,21 +481,27 @@ export class GameEngine {
       leaves.position.y = 6;
       treeGroup.add(leaves);
 
-      treeGroup.position.set(
-        Math.cos(angle) * r,
-        2,
-        Math.sin(angle) * r
-      );
+      treeGroup.position.set(Math.cos(angle) * r, 2, Math.sin(angle) * r);
       treeGroup.rotation.y = Math.random() * Math.PI;
-      group.add(treeGroup);
+      terrain.add(treeGroup);
     }
 
-    // Campfire
+    return terrain;
+  }
+
+  spawnIsland(island: IslandState) {
+    const group = new THREE.Group();
+
+    // Terrain (procedural, may be replaced by GLB)
+    group.add(this.buildProceduralIslandTerrain(island));
+
+    // Campfire always stays
     const campfireGroup = this.createCampfire(island.scale);
+    campfireGroup.name = "campfire";
     campfireGroup.position.set(0, 2.5, 0);
     group.add(campfireGroup);
 
-    // Project portal icon above campfire
+    // Project portal icon always stays
     if (island.projectUrl || island.id) {
       const portalGroup = this.createPortalIcon(island);
       portalGroup.position.set(0, 10, 0);
@@ -484,6 +512,20 @@ export class GameEngine {
     group.position.set(island.position.x, 0, island.position.z);
     this.scene.add(group);
     this.islands.set(island.id, { group, state: island });
+
+    if (island.modelUrl) {
+      this.loadGLB(island.modelUrl)
+        .then((model) => {
+          const existing = group.getObjectByName("terrain");
+          if (existing) group.remove(existing);
+          model.name = "terrain";
+          model.scale.setScalar(island.scale);
+          group.add(model);
+        })
+        .catch(() => {
+          // Procedural terrain stays on failure
+        });
+    }
   }
 
   private createCampfire(scale: number) {
@@ -597,23 +639,27 @@ export class GameEngine {
   spawnEnemy(enemy: EnemyState) {
     const group = new THREE.Group();
 
+    // Procedural body (named so it can be swapped by a GLB)
+    const bodyGroup = new THREE.Group();
+    bodyGroup.name = "body";
+
     const bodyMat = new THREE.MeshLambertMaterial({ color: 0x8b2222 });
     const hullGeo = new THREE.CylinderGeometry(1.8, 2.5, 3, 8);
     const hull = new THREE.Mesh(hullGeo, bodyMat);
     hull.position.y = 0.5;
-    group.add(hull);
+    bodyGroup.add(hull);
 
     const deckGeo = new THREE.BoxGeometry(10, 0.4, 4);
     const deckMat = new THREE.MeshLambertMaterial({ color: 0x6b3a2a });
     const deck = new THREE.Mesh(deckGeo, deckMat);
     deck.position.y = 2.2;
-    group.add(deck);
+    bodyGroup.add(deck);
 
     const mastGeo = new THREE.CylinderGeometry(0.15, 0.2, 10, 6);
     const mastMat = new THREE.MeshLambertMaterial({ color: 0x7a5c14 });
     const mast = new THREE.Mesh(mastGeo, mastMat);
     mast.position.set(0, 7, 0);
-    group.add(mast);
+    bodyGroup.add(mast);
 
     const sailGeo = new THREE.PlaneGeometry(4, 6);
     const sailMat = new THREE.MeshLambertMaterial({
@@ -622,9 +668,11 @@ export class GameEngine {
     });
     const sail = new THREE.Mesh(sailGeo, sailMat);
     sail.position.set(0, 8, 0.1);
-    group.add(sail);
+    bodyGroup.add(sail);
 
-    // Health bar (using a simple plane above ship)
+    group.add(bodyGroup);
+
+    // Health bar always stays above the group
     const healthBarGeo = new THREE.PlaneGeometry(4, 0.4);
     const healthBarMat = new THREE.MeshBasicMaterial({ color: 0x00ff44 });
     const healthBar = new THREE.Mesh(healthBarGeo, healthBarMat);
@@ -636,6 +684,19 @@ export class GameEngine {
     group.rotation.y = enemy.rotation;
     this.scene.add(group);
     this.enemies.set(enemy.id, { group, state: enemy });
+
+    if (enemy.modelUrl) {
+      this.loadGLB(enemy.modelUrl)
+        .then((model) => {
+          const existing = group.getObjectByName("body");
+          if (existing) group.remove(existing);
+          model.name = "body";
+          group.add(model);
+        })
+        .catch(() => {
+          // Procedural geometry stays on failure
+        });
+    }
   }
 
   fireCannonBall(fromPosition: THREE.Vector3, direction: THREE.Vector3, isPlayer: boolean) {

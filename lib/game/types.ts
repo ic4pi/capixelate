@@ -23,6 +23,7 @@ export interface EnemyState {
   id: string;
   name: string;
   type: "ship" | "monster";
+  modelUrl?: string;
   position: { x: number; z: number };
   rotation: number;
   health: number;
@@ -44,6 +45,7 @@ export interface EnemyState {
 export interface IslandState {
   id: string;
   name: string;
+  modelUrl?: string;
   position: { x: number; z: number };
   scale: number;
   projectUrl?: string;

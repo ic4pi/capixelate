@@ -4,6 +4,23 @@ import { GameEngine } from "@/lib/game/engine";
 import type { GameState, IslandState } from "@/lib/game/types";
 import GameHUD from "./GameHUD";
 
+// All API calls and uploaded-file URLs are routed through this base.
+// Set NEXT_PUBLIC_API_BASE_URL to the Render service URL on the Vercel deployment.
+// Leave it empty for local dev or when the whole app runs on a single host.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+function apiUrl(path: string) {
+  return `${API_BASE}${path}`;
+}
+
+// Make a relative /api/files/... path absolute using the API base URL.
+// Returns the path unchanged when already absolute (http/https).
+function resolveFileUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_BASE}${url}`;
+}
+
 interface ProjectData {
   id: string;
   title: string;
@@ -18,6 +35,7 @@ interface IslandData {
   posX: number;
   posZ: number;
   scale: number;
+  modelUrl?: string;
   projects: ProjectData[];
 }
 
@@ -25,6 +43,7 @@ interface EnemyData {
   id: string;
   name: string;
   type: string;
+  modelUrl?: string;
   hitPoints: number;
   cannonAccuracy: number;
   difficulty: string;
@@ -36,6 +55,13 @@ interface EnemyData {
   zoneZ: number;
   zoneRadius: number;
   speed: number;
+}
+
+interface ShipData {
+  id: string;
+  name: string;
+  type: string;
+  modelUrl?: string;
 }
 
 export default function GameCanvas() {
@@ -54,7 +80,6 @@ export default function GameCanvas() {
     enemies: [],
   });
   const [nearbyIsland, setNearbyIsland] = useState<IslandState | null>(null);
-  const [showPortal, setShowPortal] = useState(false);
   const [activeProject, setActiveProject] = useState<{
     title: string;
     description: string;
@@ -84,17 +109,21 @@ export default function GameCanvas() {
 
     const startGame = async () => {
       try {
-        const [islandsRes, enemiesRes] = await Promise.all([
-          fetch("/api/islands"),
-          fetch("/api/enemies"),
+        const [islandsRes, enemiesRes, shipsRes] = await Promise.all([
+          fetch(apiUrl("/api/islands")),
+          fetch(apiUrl("/api/enemies")),
+          fetch(apiUrl("/api/ships")),
         ]);
+
         const islandsJson: { islands: IslandData[] } = await islandsRes.json();
         const enemiesJson: { enemies: EnemyData[] } = await enemiesRes.json();
+        const shipsJson: { ships: ShipData[] } = await shipsRes.json();
 
         const islandsData: IslandState[] = (islandsJson.islands || []).map(
           (isl: IslandData) => ({
             id: isl.id,
             name: isl.name,
+            modelUrl: resolveFileUrl(isl.modelUrl),
             position: { x: isl.posX, z: isl.posZ },
             scale: isl.scale,
             projectUrl: isl.projects?.[0]?.url,
@@ -109,7 +138,11 @@ export default function GameCanvas() {
           id: en.id,
           name: en.name,
           type: en.type as "ship" | "monster",
-          position: { x: en.zoneX + (Math.random() - 0.5) * en.zoneRadius, z: en.zoneZ + (Math.random() - 0.5) * en.zoneRadius },
+          modelUrl: resolveFileUrl(en.modelUrl),
+          position: {
+            x: en.zoneX + (Math.random() - 0.5) * en.zoneRadius,
+            z: en.zoneZ + (Math.random() - 0.5) * en.zoneRadius,
+          },
           rotation: Math.random() * Math.PI * 2,
           health: en.hitPoints * 25,
           maxHealth: en.hitPoints * 25,
@@ -126,18 +159,26 @@ export default function GameCanvas() {
           attackMode: en.attackMode,
         }));
 
+        // Use the first ship of type "player" as the player ship model
+        const playerShip = shipsJson.ships?.find(
+          (s: ShipData) => s.type === "player"
+        );
+        const playerShipModelUrl = resolveFileUrl(playerShip?.modelUrl);
+
         engine = new GameEngine(canvas);
-        engine.onStateUpdate = (state) => setHudState((prev) => ({ ...prev, ...state }));
+        engine.onStateUpdate = (state) =>
+          setHudState((prev) => ({ ...prev, ...state }));
         engine.onIslandProximity = handleIslandProximity;
         engineRef.current = engine;
 
-        await engine.init(islandsData, enemiesData);
+        await engine.init(islandsData, enemiesData, playerShipModelUrl);
         setLoading(false);
       } catch (err) {
         console.error("Game init error:", err);
-        // Start with defaults if API fails
+
         engine = new GameEngine(canvas);
-        engine.onStateUpdate = (state) => setHudState((prev) => ({ ...prev, ...state }));
+        engine.onStateUpdate = (state) =>
+          setHudState((prev) => ({ ...prev, ...state }));
         engine.onIslandProximity = handleIslandProximity;
         engineRef.current = engine;
 
@@ -186,7 +227,7 @@ export default function GameCanvas() {
     };
   }, [handleIslandProximity]);
 
-  // Clear nearby island when moving away
+  // Clear nearby island when the player moves away
   useEffect(() => {
     const interval = setInterval(() => {
       setNearbyIsland((prev) => {
@@ -206,13 +247,18 @@ export default function GameCanvas() {
       {loading && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950">
           <div className="text-center">
-            <div className="text-6xl font-bold text-cyan-400 mb-4 tracking-widest"
-              style={{ fontFamily: "serif", textShadow: "0 0 30px #00ffcc" }}>
+            <div
+              className="text-6xl font-bold text-cyan-400 mb-4 tracking-widest"
+              style={{ fontFamily: "serif", textShadow: "0 0 30px #00ffcc" }}
+            >
               CAPIXELATE
             </div>
             <div className="text-slate-400 text-lg mb-8">Charting the waters...</div>
             <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden mx-auto">
-              <div className="h-full bg-cyan-400 rounded-full animate-pulse" style={{ width: "70%" }} />
+              <div
+                className="h-full bg-cyan-400 rounded-full animate-pulse"
+                style={{ width: "70%" }}
+              />
             </div>
           </div>
         </div>

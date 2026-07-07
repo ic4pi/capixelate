@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: capixelate-api
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    disk:
+      name: capixelate-data
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:/var/data/capixelate.db
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Set to the Vercel frontend URL to allow cross-origin requests
+      # e.g. https://capixelate.vercel.app
+      - key: ALLOWED_ORIGIN
+        sync: false
+      # Set to the Render service URL (used to build absolute file URLs in upload responses)
+      # e.g. https://capixelate-api.onrender.com
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false
