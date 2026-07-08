@@ -184,28 +184,30 @@ export default function GameCanvas() {
         engine.onIslandProximity = handleIslandProximity;
         engineRef.current = engine;
 
+        // Fallback islands — close enough to be visible from the start
+        // and placed in front of the ship's initial heading (-Z direction)
         const defaultIslands: IslandState[] = [
           {
             id: "main",
             name: "Portfolio Island",
-            position: { x: 0, z: -180 },
+            position: { x: 0, z: -120 },
             scale: 1.2,
             projectUrl: undefined,
             projectTitle: "Explore Projects",
-            projectDescription: "Visit this island to see projects",
+            projectDescription: "Visit this island to see your projects",
             isDiscovered: false,
           },
           {
             id: "island2",
             name: "Discovery Isle",
-            position: { x: 300, z: -250 },
+            position: { x: 200, z: -200 },
             scale: 0.9,
             isDiscovered: false,
           },
           {
             id: "island3",
             name: "Treasure Cove",
-            position: { x: -280, z: -310 },
+            position: { x: -180, z: -220 },
             scale: 1.0,
             isDiscovered: false,
           },

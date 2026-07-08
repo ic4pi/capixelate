@@ -8,12 +8,13 @@ export async function POST() {
     await prisma.island.deleteMany();
     await prisma.enemy.deleteMany();
 
-    // Create islands
+    // Islands placed in the -Z direction (the ship's initial heading)
+    // Close enough to be visible straight ahead from the start
     const island1 = await prisma.island.create({
       data: {
         name: "Showcase Isle",
         posX: 0,
-        posZ: -220,
+        posZ: -120,
         scale: 1.3,
         isActive: true,
       },
@@ -22,8 +23,8 @@ export async function POST() {
     const island2 = await prisma.island.create({
       data: {
         name: "Discovery Cove",
-        posX: 350,
-        posZ: -280,
+        posX: 200,
+        posZ: -200,
         scale: 0.95,
         isActive: true,
       },
@@ -32,8 +33,8 @@ export async function POST() {
     const island3 = await prisma.island.create({
       data: {
         name: "Horizon Reach",
-        posX: -300,
-        posZ: -340,
+        posX: -180,
+        posZ: -220,
         scale: 1.0,
         isActive: true,
       },
