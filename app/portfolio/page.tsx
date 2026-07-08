@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+const IslandScene = dynamic(() => import("@/components/game/IslandScene"), { ssr: false });
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
@@ -25,136 +28,154 @@ export default function PortfolioPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const icons = projects.map((p) => p.iconUrl).filter(Boolean) as string[];
+
   return (
-    <main
-      className="min-h-screen w-full"
-      style={{ background: "radial-gradient(ellipse at top, #0d0900 0%, #030200 100%)" }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-8 pb-6 border-b border-amber-900/30">
-        <a
-          href="/"
-          className="text-amber-600 text-sm font-mono tracking-widest hover:text-amber-400 transition-colors"
-        >
-          ← BACK TO SEAS
-        </a>
+    <div className="relative min-h-screen w-full overflow-x-hidden">
+      {/* 3D island background — drag to orbit 360° */}
+      <IslandScene projectIcons={icons} />
+
+      {/* All UI sits above the canvas */}
+      <div className="relative z-10 min-h-screen flex flex-col">
+
+        {/* Header */}
         <div
-          className="text-2xl sm:text-3xl font-bold tracking-[0.25em]"
-          style={{ fontFamily: "serif", color: "#f59e0b", textShadow: "0 0 30px #f59e0b66" }}
+          className="flex items-center justify-between px-5 py-4"
+          style={{ background: "linear-gradient(to bottom, rgba(1,6,8,0.85) 0%, transparent 100%)" }}
         >
-          CAPIXELATE
+          <a
+            href="/"
+            className="text-xs font-mono tracking-widest transition-colors"
+            style={{ color: "#92400e" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#f59e0b")}
+            onMouseLeave={e => (e.currentTarget.style.color = "#92400e")}
+          >
+            ← BACK TO SEAS
+          </a>
+          <div
+            className="text-xl sm:text-2xl font-bold tracking-[0.25em]"
+            style={{ fontFamily: "serif", color: "#f59e0b", textShadow: "0 0 24px #f59e0b88" }}
+          >
+            CAPIXELATE
+          </div>
+          <div className="text-[10px] font-mono text-amber-900 hidden sm:block">DRAG TO ORBIT</div>
         </div>
-        <div className="w-24" />
-      </div>
 
-      {/* Title */}
-      <div className="text-center pt-10 pb-8 px-4">
-        <h1
-          className="text-3xl sm:text-4xl font-bold mb-2"
-          style={{ fontFamily: "serif", color: "#fde68a", textShadow: "0 0 20px #f59e0b44" }}
+        {/* Spacer so cards start near bottom half */}
+        <div className="flex-1 min-h-[35vh] pointer-events-none" />
+
+        {/* Projects */}
+        <div
+          className="px-4 pb-10 pt-6"
+          style={{ background: "linear-gradient(to top, rgba(1,3,4,0.92) 60%, transparent 100%)" }}
         >
-          Portfolio
-        </h1>
-        <p className="text-amber-700 text-sm tracking-widest font-mono">PROJECTS &amp; WORK</p>
-      </div>
+          <div className="max-w-2xl mx-auto">
+            <h1
+              className="text-center text-2xl sm:text-3xl font-bold mb-1"
+              style={{ fontFamily: "serif", color: "#fde68a" }}
+            >
+              Portfolio
+            </h1>
+            <p className="text-center text-[11px] font-mono tracking-widest text-amber-800 mb-7">
+              PROJECTS &amp; WORK
+            </p>
 
-      {/* Projects grid */}
-      <div className="max-w-4xl mx-auto px-4 pb-16">
-        {loading && (
-          <div className="flex flex-col items-center gap-4 py-20">
-            <div className="w-48 h-1.5 rounded-full overflow-hidden" style={{ background: "#1c0d00" }}>
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: "60%",
-                  background: "linear-gradient(90deg, #b45309, #f59e0b)",
-                  boxShadow: "0 0 14px #f59e0b",
-                  animation: "port-slide 1.6s ease-in-out infinite",
-                }}
-              />
-            </div>
-            <style>{`@keyframes port-slide { 0%{margin-left:0} 50%{margin-left:40%} 100%{margin-left:0} }`}</style>
-          </div>
-        )}
+            {loading && (
+              <div className="flex justify-center py-10">
+                <div className="w-40 h-1.5 rounded-full overflow-hidden" style={{ background: "#1c0d00" }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: "55%",
+                      background: "linear-gradient(90deg, #b45309, #f59e0b)",
+                      boxShadow: "0 0 12px #f59e0b",
+                      animation: "port-slide 1.6s ease-in-out infinite",
+                    }}
+                  />
+                </div>
+                <style>{`@keyframes port-slide{0%{margin-left:0}50%{margin-left:45%}100%{margin-left:0}}`}</style>
+              </div>
+            )}
 
-        {!loading && projects.length === 0 && (
-          <div className="text-center py-20 text-amber-800 font-mono text-sm">
-            No projects found. Add some in the admin dashboard.
-          </div>
-        )}
+            {!loading && projects.length === 0 && (
+              <p className="text-center text-amber-900 font-mono text-sm py-10">
+                No projects yet — add some in the admin panel.
+              </p>
+            )}
 
-        {!loading && projects.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {projects.map((p) => {
-              let tags: string[] = [];
-              try { tags = JSON.parse(p.tags); } catch { tags = []; }
-              return (
-                <a
-                  key={p.id}
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group block rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:-translate-y-0.5"
-                  style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(245,158,11,0.2)",
-                    boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
-                  }}
-                >
-                  {/* Image */}
-                  {p.imageUrl && (
-                    <div className="w-full h-40 overflow-hidden">
-                      <img
-                        src={p.imageUrl}
-                        alt={p.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                  )}
-                  <div className="p-5">
-                    {/* Icon + title */}
-                    <div className="flex items-center gap-3 mb-2">
-                      {p.iconUrl && (
-                        <img src={p.iconUrl} alt="" className="w-7 h-7 rounded-lg object-contain" />
-                      )}
-                      <h2
-                        className="text-lg font-bold"
-                        style={{ fontFamily: "serif", color: "#fde68a" }}
-                      >
-                        {p.title}
-                      </h2>
-                    </div>
-                    <p className="text-slate-400 text-sm leading-relaxed mb-4">{p.description}</p>
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {tags.map((t: string) => (
-                          <span
-                            key={t}
-                            className="text-[10px] font-mono px-2 py-0.5 rounded-full"
-                            style={{
-                              background: "rgba(245,158,11,0.12)",
-                              color: "#b45309",
-                              border: "1px solid rgba(245,158,11,0.2)",
-                            }}
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div
-                      className="mt-4 text-xs font-mono tracking-widest"
-                      style={{ color: "#f59e0b" }}
+            {!loading && projects.length > 0 && (
+              <div className="flex flex-col gap-4">
+                {projects.map((p) => {
+                  let tags: string[] = [];
+                  try { tags = JSON.parse(p.tags); } catch { tags = []; }
+                  return (
+                    <a
+                      key={p.id}
+                      href={p.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-start gap-4 rounded-2xl p-4 transition-all duration-200 hover:scale-[1.01]"
+                      style={{
+                        background: "rgba(0,0,0,0.6)",
+                        border: "1px solid rgba(245,158,11,0.2)",
+                        backdropFilter: "blur(8px)",
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+                        textDecoration: "none",
+                      }}
                     >
-                      VISIT PROJECT →
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
+                      {/* Icon */}
+                      <div
+                        className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden"
+                        style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)" }}
+                      >
+                        {p.iconUrl ? (
+                          <img src={p.iconUrl} alt="" className="w-8 h-8 object-contain" />
+                        ) : (
+                          <span style={{ color: "#f59e0b", fontSize: 22 }}>🏝</span>
+                        )}
+                      </div>
+
+                      {/* Text */}
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="font-bold text-base mb-0.5 group-hover:text-amber-300 transition-colors"
+                          style={{ fontFamily: "serif", color: "#fde68a" }}
+                        >
+                          {p.title}
+                        </div>
+                        <p className="text-slate-400 text-sm leading-relaxed mb-2 line-clamp-2">
+                          {p.description}
+                        </p>
+                        {tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {tags.map((t: string) => (
+                              <span
+                                key={t}
+                                className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
+                                style={{
+                                  background: "rgba(245,158,11,0.1)",
+                                  color: "#92400e",
+                                  border: "1px solid rgba(245,158,11,0.15)",
+                                }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-shrink-0 self-center text-amber-700 group-hover:text-amber-400 transition-colors text-lg">
+                        →
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
