@@ -98,9 +98,15 @@ export default function GameCanvas() {
 
   const handlePortalClick = useCallback(() => {
     if (nearbyIsland?.projectUrl) {
+      // Stop the ship when visiting a portal so it doesn't drift on return
+      engineRef.current?.stopMovement();
       window.open(nearbyIsland.projectUrl, "_blank");
     }
   }, [nearbyIsland]);
+
+  const handleDock = useCallback(() => {
+    engineRef.current?.stopMovement();
+  }, []);
 
   // Called when user clicks Set Sail or Go Directly to Island
   const handleIntroStart = useCallback((sailDirectly: boolean) => {
@@ -257,6 +263,16 @@ export default function GameCanvas() {
     return () => clearInterval(interval);
   }, []);
 
+  // Activate island-proximity camera view when docked at an island
+  useEffect(() => {
+    if (!engineRef.current) return;
+    if (nearbyIsland) {
+      engineRef.current.setIslandProximityView(true, nearbyIsland.position);
+    } else {
+      engineRef.current.setIslandProximityView(false);
+    }
+  }, [nearbyIsland]);
+
   return (
     <div className="relative w-full h-full">
       {/* Canvas renders in background during intro so Three.js warms up */}
@@ -273,6 +289,7 @@ export default function GameCanvas() {
           nearbyIsland={nearbyIsland}
           onSailToIsland={handleSailToIsland}
           onPortalClick={handlePortalClick}
+          onDock={handleDock}
           activeProject={activeProject}
           onCloseProject={() => setActiveProject(null)}
           onTouchInput={handleTouchInput}

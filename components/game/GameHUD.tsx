@@ -7,6 +7,7 @@ interface GameHUDProps {
   nearbyIsland: IslandState | null;
   onSailToIsland: () => void;
   onPortalClick: () => void;
+  onDock: () => void;
   activeProject: { title: string; description: string; url: string } | null;
   onCloseProject: () => void;
   onTouchInput: (key: "forward" | "backward" | "left" | "right" | "fire", pressed: boolean) => void;
@@ -17,6 +18,7 @@ export default function GameHUD({
   nearbyIsland,
   onSailToIsland,
   onPortalClick,
+  onDock,
   activeProject,
   onCloseProject,
   onTouchInput,
@@ -332,7 +334,12 @@ export default function GameHUD({
 
       {/* ===== MOBILE TOUCH CONTROLS ===== */}
       {isMobile && (
-        <MobileTouchControls onTouchInput={onTouchInput} onSailToIsland={onSailToIsland} />
+        <MobileTouchControls
+          onTouchInput={onTouchInput}
+          onSailToIsland={onSailToIsland}
+          onDock={onDock}
+          nearIsland={!!nearbyIsland}
+        />
       )}
 
       {/* ===== NEARBY ISLAND — DOCKED VIEW ===== */}
@@ -509,9 +516,11 @@ type TouchKey = "forward" | "backward" | "left" | "right" | "fire";
 interface MobileTouchControlsProps {
   onTouchInput: (key: TouchKey, pressed: boolean) => void;
   onSailToIsland: () => void;
+  onDock: () => void;
+  nearIsland: boolean;
 }
 
-function MobileTouchControls({ onTouchInput, onSailToIsland }: MobileTouchControlsProps) {
+function MobileTouchControls({ onTouchInput, onSailToIsland, onDock, nearIsland }: MobileTouchControlsProps) {
   const btnStyle = (color = "#f59e0b"): React.CSSProperties => ({
     background: "rgba(0,0,0,0.65)",
     border: `1.5px solid ${color}55`,
@@ -571,20 +580,35 @@ function MobileTouchControls({ onTouchInput, onSailToIsland }: MobileTouchContro
         </div>
       </div>
 
-      {/* Right side: sail button + fire cannon */}
+      {/* Right side: sail/dock button + fire cannon */}
       <div className="flex flex-col items-center gap-2">
-        <button
-          onClick={onSailToIsland}
-          className="text-[10px] font-bold tracking-wide px-3 py-2 rounded-lg"
-          style={{
-            background: "rgba(0,0,0,0.65)",
-            border: "1.5px solid #f59e0b55",
-            color: "#f59e0b",
-            boxShadow: "0 0 10px #f59e0b22",
-          }}
-        >
-          ⚓ TO ISLAND
-        </button>
+        {nearIsland ? (
+          <button
+            onClick={onDock}
+            className="text-[11px] font-bold tracking-wide px-3 py-2 rounded-lg"
+            style={{
+              background: "rgba(0,20,10,0.85)",
+              border: "1.5px solid #00ffcc88",
+              color: "#00ffcc",
+              boxShadow: "0 0 14px #00ffcc44",
+            }}
+          >
+            ⚓ DOCK
+          </button>
+        ) : (
+          <button
+            onClick={onSailToIsland}
+            className="text-[10px] font-bold tracking-wide px-3 py-2 rounded-lg"
+            style={{
+              background: "rgba(0,0,0,0.65)",
+              border: "1.5px solid #f59e0b55",
+              color: "#f59e0b",
+              boxShadow: "0 0 10px #f59e0b22",
+            }}
+          >
+            ⚓ TO ISLAND
+          </button>
+        )}
         <div
           style={{ ...btnStyle("#ef4444"), width: 72, height: 72, borderRadius: "50%", fontSize: "24px" }}
           {...makeHandlers("fire")}
