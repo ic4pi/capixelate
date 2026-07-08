@@ -44,6 +44,12 @@ export class GameEngine {
   private frameCount = 0;
   private gltfLoader = new GLTFLoader();
 
+  // 0 = close deck view  |  1 = full crow's nest view
+  // Controlled by scroll wheel, smoothly interpolated each frame
+  private zoomTarget = 0;
+  private zoomLevel = 0;
+  private _onWheel?: (e: WheelEvent) => void;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -373,7 +379,7 @@ export class GameEngine {
     this.playerShip.position.set(0, 0.5, 0);
     this.scene.add(this.playerShip);
 
-    // Camera follows ship — zoomed out for better ocean overview
+    // Initial camera: deck view (zoomLevel=0)
     this.camera.position.set(0, 22, 55);
     this.camera.lookAt(0, 2, 0);
 
@@ -476,6 +482,15 @@ export class GameEngine {
     window.addEventListener("keyup", keyUp);
     this._keyDown = keyDown;
     this._keyUp = keyUp;
+
+    // Scroll wheel: zoom in/out along a crow's-nest arc
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Positive deltaY = scroll down = zoom out (climb toward crow's nest)
+      this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget + e.deltaY * 0.0008));
+    };
+    this.canvas.addEventListener("wheel", onWheel, { passive: false });
+    this._onWheel = onWheel;
   }
 
   private _keyDown?: (e: KeyboardEvent) => void;
@@ -907,14 +922,26 @@ export class GameEngine {
     }
 
     // Camera follow
+    // Smooth zoom level toward target each frame
+    this.zoomLevel += (this.zoomTarget - this.zoomLevel) * Math.min(1, 3.5 * delta);
+
+    // Crow's-nest arc: as zoom increases the camera rises steeply (like
+    // climbing a mast) and pulls back moderately — giving a panoramic top-down
+    // overview rather than just flying backwards.
+    //   zoomLevel=0 → deck view:      back=55  up=22
+    //   zoomLevel=1 → crow's nest:    back=130 up=140
+    const z = this.zoomLevel;
+    const camBack = 55 + 75 * z;
+    const camUp   = 22 + 118 * (z * z);   // quadratic: rises faster at the top
+
     const cameraOffset = new THREE.Vector3(
-      -Math.sin(gs.playerRotation) * 55,
-      22,
-      -Math.cos(gs.playerRotation) * 55
+      -Math.sin(gs.playerRotation) * camBack,
+      camUp,
+      -Math.cos(gs.playerRotation) * camBack
     );
     this.camera.position.lerp(
       this.playerShip.position.clone().add(cameraOffset),
-      0.04
+      0.05
     );
     this.camera.lookAt(this.playerShip.position);
 
@@ -1267,6 +1294,7 @@ export class GameEngine {
     cancelAnimationFrame(this.animationId);
     if (this._keyDown) window.removeEventListener("keydown", this._keyDown);
     if (this._keyUp) window.removeEventListener("keyup", this._keyUp);
+    if (this._onWheel) this.canvas.removeEventListener("wheel", this._onWheel);
     this.renderer.dispose();
   }
 }
