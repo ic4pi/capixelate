@@ -64,6 +64,8 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   legendary: "text-purple-400 bg-purple-900/30 border-purple-700/40",
 };
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
 export default function AdminDashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -146,12 +148,12 @@ export default function AdminDashboard() {
     }
   };
 
-  // File upload helper
+  // File upload helper — must go to Render backend (persistent disk)
   const uploadFile = async (file: File, category: string): Promise<string> => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("category", category);
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: fd });
     const data = await res.json();
     if (!data.url) throw new Error("Upload failed");
     return data.url;
@@ -900,7 +902,7 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("category", category);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: fd });
       const data = await res.json();
       if (data.url) onUpload(data.url);
     } catch {
