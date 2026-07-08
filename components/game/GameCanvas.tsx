@@ -3,18 +3,14 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { GameEngine } from "@/lib/game/engine";
 import type { GameState, IslandState } from "@/lib/game/types";
 import GameHUD from "./GameHUD";
+import IntroScreen from "./IntroScreen";
 
-// All API calls and uploaded-file URLs are routed through this base.
-// Set NEXT_PUBLIC_API_BASE_URL to the Render service URL on the Vercel deployment.
-// Leave it empty for local dev or when the whole app runs on a single host.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 function apiUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
-// Make a relative /api/files/... path absolute using the API base URL.
-// Returns the path unchanged when already absolute (http/https).
 function resolveFileUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -86,7 +82,11 @@ export default function GameCanvas() {
     description: string;
     url: string;
   } | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // engineReady: Three.js init finished, canvas is rendering
+  // showIntro:   intro overlay is still visible (user hasn't clicked through yet)
+  const [engineReady, setEngineReady] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
 
   const handleIslandProximity = useCallback((island: IslandState) => {
     setNearbyIsland(island);
@@ -101,6 +101,15 @@ export default function GameCanvas() {
       window.open(nearbyIsland.projectUrl, "_blank");
     }
   }, [nearbyIsland]);
+
+  // Called when user clicks Set Sail or Go Directly to Island
+  const handleIntroStart = useCallback((sailDirectly: boolean) => {
+    setShowIntro(false);
+    if (sailDirectly) {
+      // Small timeout so the canvas is fully visible before the sail animation starts
+      setTimeout(() => engineRef.current?.fireSailToIsland(), 300);
+    }
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -161,10 +170,7 @@ export default function GameCanvas() {
           attackMode: en.attackMode,
         }));
 
-        // Use the first ship of type "player" as the player ship model
-        const playerShip = shipsJson.ships?.find(
-          (s: ShipData) => s.type === "player"
-        );
+        const playerShip = shipsJson.ships?.find((s: ShipData) => s.type === "player");
         const playerShipModelUrl = resolveFileUrl(playerShip?.modelUrl);
 
         engine = new GameEngine(canvas);
@@ -174,7 +180,7 @@ export default function GameCanvas() {
         engineRef.current = engine;
 
         await engine.init(islandsData, enemiesData, playerShipModelUrl);
-        setLoading(false);
+        setEngineReady(true);
       } catch (err) {
         console.error("Game init error:", err);
 
@@ -184,8 +190,6 @@ export default function GameCanvas() {
         engine.onIslandProximity = handleIslandProximity;
         engineRef.current = engine;
 
-        // Fallback islands — close enough to be visible from the start
-        // and placed in front of the ship's initial heading (-Z direction)
         const defaultIslands: IslandState[] = [
           {
             id: "main",
@@ -214,15 +218,13 @@ export default function GameCanvas() {
         ];
 
         await engine.init(defaultIslands, []);
-        setLoading(false);
+        setEngineReady(true);
       }
     };
 
     startGame();
 
-    const handleResize = () => {
-      engineRef.current?.onResize();
-    };
+    const handleResize = () => engineRef.current?.onResize();
     window.addEventListener("resize", handleResize);
 
     return () => {
@@ -231,7 +233,7 @@ export default function GameCanvas() {
     };
   }, [handleIslandProximity]);
 
-  // Clear nearby island when the player moves away
+  // Clear nearby island when player moves away
   useEffect(() => {
     const interval = setInterval(() => {
       setNearbyIsland((prev) => {
@@ -239,8 +241,7 @@ export default function GameCanvas() {
         const { playerPosition } = engineRef.current.gameState;
         const dx = prev.position.x - playerPosition.x;
         const dz = prev.position.z - playerPosition.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        return dist > 50 ? null : prev;
+        return Math.sqrt(dx * dx + dz * dz) > 50 ? null : prev;
       });
     }, 500);
     return () => clearInterval(interval);
@@ -248,33 +249,15 @@ export default function GameCanvas() {
 
   return (
     <div className="relative w-full h-full">
-      {loading && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950">
-          <div className="text-center">
-            <div
-              className="text-6xl font-bold text-cyan-400 mb-4 tracking-widest"
-              style={{ fontFamily: "serif", textShadow: "0 0 30px #00ffcc" }}
-            >
-              CAPIXELATE
-            </div>
-            <div className="text-slate-400 text-lg mb-8">Charting the waters...</div>
-            <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden mx-auto">
-              <div
-                className="h-full bg-cyan-400 rounded-full animate-pulse"
-                style={{ width: "70%" }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Canvas renders in background during intro so Three.js warms up */}
       <canvas
         ref={canvasRef}
         className="w-full h-full block"
         style={{ touchAction: "none" }}
       />
 
-      {!loading && (
+      {/* HUD — only after intro is dismissed */}
+      {!showIntro && (
         <GameHUD
           hudState={hudState}
           nearbyIsland={nearbyIsland}
@@ -283,6 +266,11 @@ export default function GameCanvas() {
           activeProject={activeProject}
           onCloseProject={() => setActiveProject(null)}
         />
+      )}
+
+      {/* Intro screen — masks the canvas during loading + cold-start wait */}
+      {showIntro && (
+        <IntroScreen engineReady={engineReady} onStart={handleIntroStart} />
       )}
     </div>
   );

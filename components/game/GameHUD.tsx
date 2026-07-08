@@ -48,8 +48,8 @@ export default function GameHUD({
       <div className="absolute top-0 left-0 right-0 pointer-events-none z-10">
         <div className="flex items-start justify-between p-3 gap-3">
           {/* Health bar */}
-          <div className="pointer-events-auto bg-black/60 backdrop-blur-sm border border-cyan-900/50 rounded-xl p-3 min-w-[220px]">
-            <div className="text-xs text-cyan-400/80 uppercase tracking-widest mb-1.5 font-mono">Hull Integrity</div>
+          <div className="pointer-events-auto bg-black/60 backdrop-blur-sm border border-amber-900/50 rounded-xl p-3 min-w-[220px]">
+            <div className="text-xs text-amber-400/80 uppercase tracking-widest mb-1.5 font-mono">Hull Integrity</div>
             <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
               <div
                 className="h-full rounded-full transition-all duration-300"
@@ -70,8 +70,8 @@ export default function GameHUD({
           {/* Site title */}
           <div className="pointer-events-auto text-center">
             <div
-              className="text-3xl font-bold tracking-[0.3em] text-cyan-300"
-              style={{ fontFamily: "serif", textShadow: "0 0 20px #00ffcc88, 0 0 40px #00ffcc44" }}
+              className="text-3xl font-bold tracking-[0.3em] text-amber-300"
+              style={{ fontFamily: "serif", textShadow: "0 0 20px #f59e0b88, 0 0 40px #f59e0b44" }}
             >
               CAPIXELATE
             </div>
@@ -79,7 +79,7 @@ export default function GameHUD({
           </div>
 
           {/* Resources */}
-          <div className="pointer-events-auto bg-black/60 backdrop-blur-sm border border-cyan-900/50 rounded-xl p-3 min-w-[180px]">
+          <div className="pointer-events-auto bg-black/60 backdrop-blur-sm border border-amber-900/50 rounded-xl p-3 min-w-[180px]">
             <div className="flex items-center gap-3 text-sm font-mono">
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-400">⚓</span>
@@ -106,9 +106,9 @@ export default function GameHUD({
 
       {/* === MINIMAP (bottom-right) === */}
       <div className="absolute bottom-4 right-4 z-10 pointer-events-none">
-        <div className="bg-black/70 backdrop-blur-sm border border-cyan-900/60 rounded-xl overflow-hidden"
+        <div className="bg-black/70 backdrop-blur-sm border border-amber-900/60 rounded-xl overflow-hidden"
           style={{ width: MAP_SIZE + 16, height: MAP_SIZE + 36 }}>
-          <div className="text-[10px] text-cyan-500/70 uppercase tracking-widest px-2 py-1 font-mono border-b border-cyan-900/30">
+          <div className="text-[10px] text-amber-500/70 uppercase tracking-widest px-2 py-1 font-mono border-b border-amber-900/30">
             Sea Chart
           </div>
           <div className="relative" style={{ width: MAP_SIZE, height: MAP_SIZE }}>
@@ -196,13 +196,13 @@ export default function GameHUD({
       <div className="absolute bottom-4 left-4 z-10">
         <button
           onClick={() => setShowControls(!showControls)}
-          className="text-xs text-slate-500 hover:text-cyan-400 transition-colors mb-2 block font-mono tracking-wide"
+          className="text-xs text-slate-500 hover:text-amber-400 transition-colors mb-2 block font-mono tracking-wide"
         >
           {showControls ? "▼ Hide Controls" : "▲ Show Controls"}
         </button>
         {showControls && (
-          <div className="bg-black/60 backdrop-blur-sm border border-cyan-900/50 rounded-xl p-3 text-xs font-mono text-slate-400 space-y-1">
-            <div className="text-cyan-400/80 text-[10px] uppercase tracking-widest mb-2">Controls</div>
+          <div className="bg-black/60 backdrop-blur-sm border border-amber-900/50 rounded-xl p-3 text-xs font-mono text-slate-400 space-y-1">
+            <div className="text-amber-400/80 text-[10px] uppercase tracking-widest mb-2">Controls</div>
             <div className="flex items-center gap-2">
               <kbd className="bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-[10px] text-white">W</kbd>
               <kbd className="bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-[10px] text-white">↑</kbd>
@@ -230,8 +230,8 @@ export default function GameHUD({
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <button
           onClick={onSailToIsland}
-          className="px-6 py-3 bg-cyan-900/60 hover:bg-cyan-700/70 border border-cyan-400/40 hover:border-cyan-400/80 rounded-xl text-cyan-300 text-sm font-bold tracking-widest transition-all duration-200 backdrop-blur-sm"
-          style={{ textShadow: "0 0 10px #00ffcc88" }}
+          className="px-6 py-3 bg-amber-900/60 hover:bg-amber-700/70 border border-amber-400/40 hover:border-amber-400/80 rounded-xl text-amber-300 text-sm font-bold tracking-widest transition-all duration-200 backdrop-blur-sm"
+          style={{ textShadow: "0 0 10px #f59e0b88" }}
         >
           ⚓ SAIL TO NEAREST ISLAND
         </button>
@@ -281,18 +281,18 @@ export default function GameHUD({
                     src={nearbyIsland.projectIconUrl}
                     alt=""
                     className="w-8 h-8 rounded-md object-contain"
-                    style={{ filter: "drop-shadow(0 0 6px #00ffcc88)" }}
+                    style={{ filter: "drop-shadow(0 0 6px #f59e0b88)" }}
                   />
                 ) : (
                   <span className="text-3xl">🏝️</span>
                 )}
-                <div className="text-2xl font-bold text-cyan-200" style={{ fontFamily: "serif", textShadow: "0 0 16px #00ffcc66" }}>
+                <div className="text-2xl font-bold text-cyan-200" style={{ fontFamily: "serif", textShadow: "0 0 16px #f59e0b66" }}>
                   {nearbyIsland.name}
                 </div>
               </div>
 
               {nearbyIsland.projectTitle && (
-                <div className="text-cyan-400 text-sm font-semibold tracking-wide mb-1">
+                <div className="text-amber-400 text-sm font-semibold tracking-wide mb-1">
                   {nearbyIsland.projectTitle}
                 </div>
               )}
@@ -308,8 +308,8 @@ export default function GameHUD({
                   onClick={onPortalClick}
                   className="w-full py-3 rounded-xl text-white font-bold text-sm tracking-widest transition-all duration-200 hover:scale-105"
                   style={{
-                    background: "linear-gradient(135deg, #0891b2, #0e7490)",
-                    boxShadow: "0 0 24px #00ffcc55, inset 0 1px 0 rgba(255,255,255,0.15)",
+                    background: "linear-gradient(135deg, #92400e, #b45309)",
+                    boxShadow: "0 0 24px #f59e0b55, inset 0 1px 0 rgba(255,255,255,0.15)",
                   }}
                 >
                   🌀 Enter Portal
@@ -367,16 +367,16 @@ export default function GameHUD({
       {/* === ACTIVE PROJECT MODAL === */}
       {activeProject && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-cyan-500/40 rounded-2xl p-8 max-w-lg w-full mx-4"
-            style={{ boxShadow: "0 0 60px #00ffcc22" }}>
-            <h2 className="text-2xl font-bold text-cyan-300 mb-3">{activeProject.title}</h2>
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-8 max-w-lg w-full mx-4"
+            style={{ boxShadow: "0 0 60px #f59e0b22" }}>
+            <h2 className="text-2xl font-bold text-amber-300 mb-3">{activeProject.title}</h2>
             <p className="text-slate-300 mb-6">{activeProject.description}</p>
             <div className="flex gap-3">
               <a
                 href={activeProject.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-center transition-all"
+                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl text-white font-bold text-center transition-all"
               >
                 Visit Project
               </a>
