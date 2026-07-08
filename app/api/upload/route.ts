@@ -16,6 +16,24 @@ async function ensureDir(subDir: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // When running on Vercel (no persistent UPLOAD_DIR) proxy to Render backend
+  const remoteBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (remoteBase && !process.env.UPLOAD_DIR) {
+    try {
+      const formData = await req.formData();
+      const upstream = await fetch(`${remoteBase}/api/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await upstream.json();
+      return NextResponse.json(data, { status: upstream.status });
+    } catch (err) {
+      console.error("Proxy upload error:", err);
+      return NextResponse.json({ error: "Upload proxy failed" }, { status: 502 });
+    }
+  }
+
+  // Running on Render — write directly to persistent disk
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -33,8 +51,6 @@ export async function POST(req: NextRequest) {
     const dir = await ensureDir(category);
     await writeFile(join(dir, filename), buffer);
 
-    // Return a path served by /api/files/. The frontend prefixes with
-    // NEXT_PUBLIC_API_BASE_URL so it resolves correctly across origins.
     const url = `/api/files/${category}/${filename}`;
     return NextResponse.json({ url, filename, originalName: file.name });
   } catch (err) {
