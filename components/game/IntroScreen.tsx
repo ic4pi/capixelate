@@ -77,36 +77,36 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
           >
             ⛵ SET SAIL
           </button>
-          <button
-            onClick={() => onStart(true)}
-            className="w-full py-3 rounded-xl font-bold tracking-widest text-sm transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
+          <a
+            href="/portfolio"
+            className="w-full py-3 rounded-xl font-bold tracking-widest text-sm transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] text-center block"
             style={{
               background: "#f59e0b",
               color: "#1c0d00",
               boxShadow: "0 0 20px #f59e0b55",
+              textDecoration: "none",
             }}
           >
             🏝 VIEW PORTFOLIO
-          </button>
+          </a>
         </div>
       )}
 
-      {/* Skip button — visible while loading */}
-      {!engineReady && (
-        <button
-          onClick={() => onStart(true)}
-          className="absolute bottom-5 right-5 px-3 py-2 text-[11px] font-bold tracking-wider transition-all duration-150 hover:scale-105 active:scale-95"
-          style={{
-            background: "#f59e0b",
-            color: "#1c0d00",
-            borderRadius: "6px",
-            boxShadow: "0 0 16px #f59e0b55",
-            fontFamily: "monospace",
-          }}
-        >
-          VIEW PORTFOLIO →
-        </button>
-      )}
+      {/* Skip button — direct link, no game engine needed */}
+      <a
+        href="/portfolio"
+        className="absolute bottom-5 right-5 px-3 py-2 text-[11px] font-bold tracking-wider transition-all duration-150 hover:scale-105 active:scale-95"
+        style={{
+          background: "#f59e0b",
+          color: "#1c0d00",
+          borderRadius: "6px",
+          boxShadow: "0 0 16px #f59e0b55",
+          fontFamily: "monospace",
+          textDecoration: "none",
+        }}
+      >
+        VIEW PORTFOLIO →
+      </a>
     </div>
   );
 }
