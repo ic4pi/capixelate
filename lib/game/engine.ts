@@ -111,8 +111,9 @@ export class GameEngine {
       0.1,
       2000
     );
-    this.camera.position.set(0, 22, 55);
-    this.camera.lookAt(0, 2, 0);
+    // Deck view starting position: close behind stern, low, looking forward
+    this.camera.position.set(0, 6, 14);
+    this.camera.lookAt(0, 3, -12);
   }
 
   private initLights() {
@@ -380,8 +381,8 @@ export class GameEngine {
     this.scene.add(this.playerShip);
 
     // Initial camera: deck view (zoomLevel=0)
-    this.camera.position.set(0, 22, 55);
-    this.camera.lookAt(0, 2, 0);
+    this.camera.position.set(0, 6, 14);
+    this.camera.lookAt(0, 3, -12);
 
     if (modelUrl) {
       this.loadGLB(modelUrl)
@@ -925,14 +926,14 @@ export class GameEngine {
     // Smooth zoom level toward target each frame
     this.zoomLevel += (this.zoomTarget - this.zoomLevel) * Math.min(1, 3.5 * delta);
 
-    // Crow's-nest arc: as zoom increases the camera rises steeply (like
-    // climbing a mast) and pulls back moderately — giving a panoramic top-down
-    // overview rather than just flying backwards.
-    //   zoomLevel=0 → deck view:      back=55  up=22
-    //   zoomLevel=1 → crow's nest:    back=130 up=140
     const z = this.zoomLevel;
-    const camBack = 55 + 75 * z;
-    const camUp   = 22 + 118 * (z * z);   // quadratic: rises faster at the top
+
+    // Camera stays CLOSE to the ship horizontally at all times.
+    // Zoom is almost entirely vertical — like climbing the ship's mast:
+    //   z=0  deck view:      12 back,  5 up  → on the ship, looking forward
+    //   z=1  crow's nest:    16 back, 22 up  → mast-top height, slight pullback
+    const camBack = 12 + 4 * z;
+    const camUp   =  5 + 17 * (z * z);  // quadratic: slow at first, steep near top
 
     const cameraOffset = new THREE.Vector3(
       -Math.sin(gs.playerRotation) * camBack,
@@ -941,9 +942,19 @@ export class GameEngine {
     );
     this.camera.position.lerp(
       this.playerShip.position.clone().add(cameraOffset),
-      0.05
+      0.06
     );
-    this.camera.lookAt(this.playerShip.position);
+
+    // Deck view looks ahead of the ship (you see the ocean in front).
+    // Crow's nest looks at the ship's waterline (tactical all-around overview).
+    const lookFwd = 14 * (1 - z);  // 14 units ahead → 0
+    const lookH   =  3 -  2 * z;  //  3 units up   → 1
+    const lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
+      Math.sin(gs.playerRotation) * lookFwd,
+      lookH,
+      Math.cos(gs.playerRotation) * lookFwd
+    ));
+    this.camera.lookAt(lookTarget);
 
     // Fire cannon
     if (input.fire && input.fireCooldown <= 0 && gs.playerCannonBalls > 0) {
