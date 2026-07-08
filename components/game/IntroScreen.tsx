@@ -26,8 +26,28 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
   const [phase, setPhase] = useState<Phase>("charting");
   const [msgIdx, setMsgIdx] = useState(0);
   const [charCount, setCharCount] = useState(0);
+  const [progress, setProgress] = useState(0);
   const engineReadyRef = useRef(engineReady);
   engineReadyRef.current = engineReady;
+
+  // Simulate loading progress: creep to ~85% then snap to 100 on engineReady
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 85) return p;
+        // Fast early, slower toward 85%
+        const step = p < 40 ? 1.2 : p < 65 ? 0.7 : 0.35;
+        return Math.min(p + step, 85);
+      });
+    }, 160);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    if (engineReady) {
+      setProgress(100);
+    }
+  }, [engineReady]);
 
   // Cycle loading messages every 5 s
   useEffect(() => {
@@ -83,7 +103,7 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
     >
       {/* Title */}
       <div
-        className="text-5xl font-bold tracking-[0.35em] mb-1"
+        className="text-4xl sm:text-5xl font-bold tracking-[0.25em] sm:tracking-[0.35em] mb-1 px-4 text-center"
         style={{
           fontFamily: "serif",
           color: "#f59e0b",
@@ -92,7 +112,7 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
       >
         CAPIXELATE
       </div>
-      <div className="text-xs tracking-[0.4em] mb-14 uppercase" style={{ color: "#92400e" }}>
+      <div className="text-xs tracking-[0.4em] mb-10 uppercase" style={{ color: "#92400e" }}>
         Portfolio Seas
       </div>
 
@@ -104,9 +124,38 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
       )}
       {phase === "ready" && <ReadyPhase onStart={onStart} />}
 
-      {/* Phase dots */}
+      {/* Progress bar — always visible */}
+      <div className="absolute bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 w-40 sm:w-48">
+        <div
+          className="relative w-full h-1.5 rounded-full overflow-hidden"
+          style={{ background: "#1c0d00" }}
+        >
+          <div
+            className="absolute top-0 left-0 h-full rounded-full transition-all duration-700 ease-out"
+            style={{
+              width: `${progress}%`,
+              background: progress === 100
+                ? "linear-gradient(90deg, #16a34a, #22c55e)"
+                : "linear-gradient(90deg, #b45309, #f59e0b, #fde68a)",
+              boxShadow: progress === 100
+                ? "0 0 12px #22c55e, 0 0 24px #22c55e66"
+                : "0 0 12px #f59e0b, 0 0 24px #f59e0b55",
+            }}
+          />
+        </div>
+        {engineReady && (
+          <div
+            className="text-center text-[10px] font-mono tracking-widest mt-1.5"
+            style={{ color: "#22c55e" }}
+          >
+            ✓ READY
+          </div>
+        )}
+      </div>
+
+      {/* Phase dots — only charting/legend */}
       {phase !== "ready" && (
-        <div className="absolute bottom-10 flex items-center gap-3">
+        <div className="absolute bottom-10 sm:bottom-8 flex items-center gap-3">
           {(["charting", "legend"] as Phase[]).map((p) => (
             <div
               key={p}
@@ -121,6 +170,23 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
           ))}
         </div>
       )}
+
+      {/* Skip button — always visible in all phases */}
+      {phase !== "ready" && (
+        <button
+          onClick={() => onStart(true)}
+          className="absolute bottom-4 right-4 sm:bottom-5 sm:right-5 px-3 py-2 text-[11px] font-bold tracking-wider transition-all duration-150 hover:scale-105 active:scale-95"
+          style={{
+            background: "#f59e0b",
+            color: "#1c0d00",
+            borderRadius: "6px",
+            boxShadow: "0 0 16px #f59e0b55",
+            fontFamily: "monospace",
+          }}
+        >
+          VIEW PORTFOLIO →
+        </button>
+      )}
     </div>
   );
 }
@@ -133,10 +199,10 @@ function ChartingPhase({
   engineReady: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-8 w-full max-w-sm px-8">
+    <div className="flex flex-col items-center gap-6 sm:gap-8 w-full max-w-xs sm:max-w-sm px-6 sm:px-8">
       {/* Animated nautical chart */}
       <div
-        className="relative w-64 h-48 rounded-xl overflow-hidden"
+        className="relative w-56 h-40 sm:w-64 sm:h-48 rounded-xl overflow-hidden"
         style={{ border: "1px solid #f59e0b33", background: "#030500" }}
       >
         {/* Grid */}
@@ -217,7 +283,7 @@ function ChartingPhase({
       {/* Message */}
       <div className="text-center">
         <div
-          className="text-base font-mono tracking-widest"
+          className="text-sm sm:text-base font-mono tracking-widest"
           style={{ color: "#f59e0b", textShadow: "0 0 12px #f59e0b55" }}
         >
           {message}
@@ -256,15 +322,15 @@ function ChartingPhase({
 
 function LegendPhase({ text, done }: { text: string; done: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-6 max-w-lg px-10 text-center">
+    <div className="flex flex-col items-center gap-6 max-w-sm sm:max-w-lg px-6 sm:px-10 text-center">
       <div
         className="text-xs uppercase tracking-[0.35em] font-mono"
         style={{ color: "#f59e0b77" }}
       >
-        — Captain's Briefing —
+        — Captain&apos;s Briefing —
       </div>
       <p
-        className="text-xl leading-relaxed"
+        className="text-base sm:text-xl leading-relaxed"
         style={{ fontFamily: "serif", color: "#fde68a", textShadow: "0 0 20px #f59e0b33" }}
       >
         {text}
@@ -282,9 +348,9 @@ function LegendPhase({ text, done }: { text: string; done: boolean }) {
 
 function ReadyPhase({ onStart }: { onStart: (sailDirectly: boolean) => void }) {
   return (
-    <div className="flex flex-col items-center gap-6 max-w-sm px-8 text-center">
+    <div className="flex flex-col items-center gap-5 max-w-xs sm:max-w-sm px-6 sm:px-8 text-center w-full">
       <div
-        className="text-2xl font-bold tracking-widest"
+        className="text-xl sm:text-2xl font-bold tracking-widest"
         style={{ fontFamily: "serif", color: "#fde68a", textShadow: "0 0 24px #f59e0b66" }}
       >
         ⚓ ALL HANDS ON DECK
@@ -310,13 +376,13 @@ function ReadyPhase({ onStart }: { onStart: (sailDirectly: boolean) => void }) {
           onClick={() => onStart(true)}
           className="w-full py-4 rounded-xl font-bold tracking-widest text-sm transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
           style={{
-            background: "linear-gradient(135deg, #1c1400, #2a1e00)",
-            color: "#f59e0b",
-            border: "1px solid #f59e0b33",
-            boxShadow: "0 0 12px #f59e0b1a",
+            background: "#f59e0b",
+            color: "#1c0d00",
+            border: "1px solid #f59e0b",
+            boxShadow: "0 0 20px #f59e0b55",
           }}
         >
-          🏝 GO DIRECTLY TO MY ISLAND
+          🏝 VIEW PORTFOLIO
         </button>
       </div>
     </div>

@@ -111,6 +111,16 @@ export default function GameCanvas() {
     }
   }, []);
 
+  // Mobile touch controls — directly mutate engine inputState
+  const handleTouchInput = useCallback(
+    (key: "forward" | "backward" | "left" | "right" | "fire", pressed: boolean) => {
+      if (engineRef.current) {
+        engineRef.current.inputState[key] = pressed;
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -265,6 +275,7 @@ export default function GameCanvas() {
           onPortalClick={handlePortalClick}
           activeProject={activeProject}
           onCloseProject={() => setActiveProject(null)}
+          onTouchInput={handleTouchInput}
         />
       )}
 
