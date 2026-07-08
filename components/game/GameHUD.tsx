@@ -237,38 +237,91 @@ export default function GameHUD({
         </button>
       </div>
 
-      {/* === NEARBY ISLAND PORTAL === */}
+      {/* === NEARBY ISLAND — DOCKED VIEW === */}
       {nearbyIsland && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-auto">
+        <>
+          {/* Full-screen island background image */}
+          {nearbyIsland.projectImageUrl && (
+            <div
+              className="absolute inset-0 z-20 pointer-events-none"
+              style={{
+                backgroundImage: `url(${nearbyIsland.projectImageUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                opacity: 0.45,
+              }}
+            />
+          )}
+
+          {/* Dark gradient overlay for readability */}
           <div
-            className="bg-black/80 backdrop-blur-md border rounded-2xl p-6 max-w-sm text-center animate-pulse-slow"
-            style={{ borderColor: "#00ffcc66", boxShadow: "0 0 40px #00ffcc33" }}
-          >
-            <div className="text-4xl mb-3">🏝️</div>
-            <div className="text-xl font-bold text-cyan-300 mb-1"
-              style={{ fontFamily: "serif" }}>
-              {nearbyIsland.name}
+            className="absolute inset-0 z-20 pointer-events-none"
+            style={{
+              background: nearbyIsland.projectImageUrl
+                ? "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.5) 100%)"
+                : "none",
+            }}
+          />
+
+          {/* Island info panel */}
+          <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-30 pointer-events-auto w-full max-w-md px-4">
+            <div
+              className="rounded-2xl p-6 text-center"
+              style={{
+                background: "rgba(0,0,0,0.72)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(0,255,204,0.35)",
+                boxShadow: "0 0 50px rgba(0,255,204,0.2), 0 8px 32px rgba(0,0,0,0.6)",
+              }}
+            >
+              {/* Icon + name row */}
+              <div className="flex items-center justify-center gap-3 mb-3">
+                {nearbyIsland.projectIconUrl ? (
+                  <img
+                    src={nearbyIsland.projectIconUrl}
+                    alt=""
+                    className="w-8 h-8 rounded-md object-contain"
+                    style={{ filter: "drop-shadow(0 0 6px #00ffcc88)" }}
+                  />
+                ) : (
+                  <span className="text-3xl">🏝️</span>
+                )}
+                <div className="text-2xl font-bold text-cyan-200" style={{ fontFamily: "serif", textShadow: "0 0 16px #00ffcc66" }}>
+                  {nearbyIsland.name}
+                </div>
+              </div>
+
+              {nearbyIsland.projectTitle && (
+                <div className="text-cyan-400 text-sm font-semibold tracking-wide mb-1">
+                  {nearbyIsland.projectTitle}
+                </div>
+              )}
+
+              {nearbyIsland.projectDescription && (
+                <div className="text-slate-300 text-sm mb-5 leading-relaxed">
+                  {nearbyIsland.projectDescription}
+                </div>
+              )}
+
+              {nearbyIsland.projectUrl ? (
+                <button
+                  onClick={onPortalClick}
+                  className="w-full py-3 rounded-xl text-white font-bold text-sm tracking-widest transition-all duration-200 hover:scale-105"
+                  style={{
+                    background: "linear-gradient(135deg, #0891b2, #0e7490)",
+                    boxShadow: "0 0 24px #00ffcc55, inset 0 1px 0 rgba(255,255,255,0.15)",
+                  }}
+                >
+                  🌀 Enter Portal
+                </button>
+              ) : (
+                <div className="text-slate-500 text-sm italic">
+                  This island awaits a project...
+                </div>
+              )}
             </div>
-            {nearbyIsland.projectTitle && (
-              <div className="text-slate-300 text-sm mb-4">
-                {nearbyIsland.projectDescription}
-              </div>
-            )}
-            {nearbyIsland.projectUrl ? (
-              <button
-                onClick={onPortalClick}
-                className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-sm transition-all"
-                style={{ boxShadow: "0 0 20px #00ffcc44" }}
-              >
-                🌀 Enter Portal → {nearbyIsland.projectTitle}
-              </button>
-            ) : (
-              <div className="text-slate-500 text-sm italic">
-                This island awaits a project...
-              </div>
-            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* === LOOT MESSAGES === */}

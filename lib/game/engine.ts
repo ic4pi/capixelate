@@ -89,43 +89,53 @@ export class GameEngine {
     this.clock = new THREE.Clock();
   }
 
+  // Moon world position — shared between initSky, initLights, initWater, and animate
+  private moonWorldPos = new THREE.Vector3(-200, 200, -600);
+
   private initScene() {
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x051520, 0.002);
+    // Reduced fog density so islands at ~200 units are clearly visible
+    this.scene.fog = new THREE.FogExp2(0x051520, 0.0012);
   }
 
   private initCamera() {
     this.camera = new THREE.PerspectiveCamera(
-      60,
+      65,
       this.canvas.clientWidth / this.canvas.clientHeight,
       0.1,
       2000
     );
-    this.camera.position.set(0, 12, 28);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.set(0, 22, 55);
+    this.camera.lookAt(0, 2, 0);
   }
 
   private initLights() {
-    const ambientLight = new THREE.AmbientLight(0x1a2a4a, 0.6);
+    // Brighter ambient for a full-moon night feel
+    const ambientLight = new THREE.AmbientLight(0x2a3a5a, 1.0);
     this.scene.add(ambientLight);
 
-    this.moonLight = new THREE.DirectionalLight(0x8fa8cc, 1.2);
-    this.moonLight.position.set(100, 200, 50);
+    // Main moonlight — bright, cool-white directional light
+    this.moonLight = new THREE.DirectionalLight(0xb0ccee, 2.8);
+    this.moonLight.position.copy(this.moonWorldPos);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.camera.near = 0.5;
-    this.moonLight.shadow.camera.far = 1000;
-    this.moonLight.shadow.camera.left = -200;
-    this.moonLight.shadow.camera.right = 200;
-    this.moonLight.shadow.camera.top = 200;
-    this.moonLight.shadow.camera.bottom = -200;
+    this.moonLight.shadow.camera.far = 1500;
+    this.moonLight.shadow.camera.left = -300;
+    this.moonLight.shadow.camera.right = 300;
+    this.moonLight.shadow.camera.top = 300;
+    this.moonLight.shadow.camera.bottom = -300;
     this.moonLight.shadow.mapSize.width = 2048;
     this.moonLight.shadow.mapSize.height = 2048;
     this.scene.add(this.moonLight);
 
-    // Moon glow fill
-    const fillLight = new THREE.PointLight(0x4466aa, 0.4, 500);
-    fillLight.position.set(-50, 80, -100);
+    // Warm fill light from opposite side — simulates sky glow
+    const fillLight = new THREE.PointLight(0x4466aa, 0.9, 800);
+    fillLight.position.set(200, 60, 200);
     this.scene.add(fillLight);
+
+    // Soft secondary fill to lift shadows
+    const skyFill = new THREE.HemisphereLight(0x2244aa, 0x0a1a2a, 0.5);
+    this.scene.add(skyFill);
   }
 
   private initSky() {
@@ -133,7 +143,7 @@ export class GameEngine {
     const skyMat = new THREE.ShaderMaterial({
       uniforms: {
         uTopColor: { value: new THREE.Color(0x010a1a) },
-        uBottomColor: { value: new THREE.Color(0x051a30) },
+        uBottomColor: { value: new THREE.Color(0x061828) },
         uOffset: { value: 33 },
         uExponent: { value: 0.6 },
       },
@@ -144,19 +154,18 @@ export class GameEngine {
     this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
     this.scene.add(this.skyMesh);
 
-    // Moon
-    const moonGeo = new THREE.SphereGeometry(8, 16, 16);
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xf0e8c0 });
+    // Full moon — large, bright sphere
+    const moonGeo = new THREE.SphereGeometry(22, 32, 32);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xf8f0d8 });
     const moon = new THREE.Mesh(moonGeo, moonMat);
-    moon.position.set(200, 350, -400);
+    moon.position.copy(this.moonWorldPos);
     this.scene.add(moon);
 
-    // Moon halo
-    const haloGeo = new THREE.SphereGeometry(12, 16, 16);
-    const haloMat = new THREE.ShaderMaterial({
+    // Halo ring 1 — inner soft glow
+    const halo1Mat = new THREE.ShaderMaterial({
       uniforms: {
-        uGlowColor: { value: new THREE.Color(0xc8d8f0) },
-        uIntensity: { value: 0.6 },
+        uGlowColor: { value: new THREE.Color(0xd0e4ff) },
+        uIntensity: { value: 0.9 },
         uTime: { value: 0 },
       },
       vertexShader: glowVertexShader,
@@ -166,9 +175,45 @@ export class GameEngine {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const halo = new THREE.Mesh(haloGeo, haloMat);
-    halo.position.copy(moon.position);
-    this.scene.add(halo);
+    const halo1 = new THREE.Mesh(new THREE.SphereGeometry(30, 20, 20), halo1Mat);
+    halo1.position.copy(this.moonWorldPos);
+    this.scene.add(halo1);
+
+    // Halo ring 2 — wider atmospheric corona
+    const halo2Mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uGlowColor: { value: new THREE.Color(0x8aaae0) },
+        uIntensity: { value: 0.5 },
+        uTime: { value: 0 },
+      },
+      vertexShader: glowVertexShader,
+      fragmentShader: glowFragmentShader,
+      transparent: true,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const halo2 = new THREE.Mesh(new THREE.SphereGeometry(48, 20, 20), halo2Mat);
+    halo2.position.copy(this.moonWorldPos);
+    this.scene.add(halo2);
+
+    // Halo ring 3 — outermost faint atmospheric scatter
+    const halo3Mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uGlowColor: { value: new THREE.Color(0x4466aa) },
+        uIntensity: { value: 0.25 },
+        uTime: { value: 0 },
+      },
+      vertexShader: glowVertexShader,
+      fragmentShader: glowFragmentShader,
+      transparent: true,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const halo3 = new THREE.Mesh(new THREE.SphereGeometry(70, 20, 20), halo3Mat);
+    halo3.position.copy(this.moonWorldPos);
+    this.scene.add(halo3);
   }
 
   private initStars() {
@@ -216,6 +261,7 @@ export class GameEngine {
         uColorMultiplier: { value: 4 },
         uFoamColor: { value: new THREE.Color(0x7ab0d0) },
         uFoamThreshold: { value: 0.15 },
+        uMoonPosition: { value: this.moonWorldPos.clone() },
       },
       vertexShader: waterVertexShader,
       fragmentShader: waterFragmentShader,
@@ -327,9 +373,9 @@ export class GameEngine {
     this.playerShip.position.set(0, 0.5, 0);
     this.scene.add(this.playerShip);
 
-    // Camera follows ship
-    this.camera.position.set(0, 12, 28);
-    this.camera.lookAt(0, 0, 0);
+    // Camera follows ship — zoomed out for better ocean overview
+    this.camera.position.set(0, 22, 55);
+    this.camera.lookAt(0, 2, 0);
 
     if (modelUrl) {
       this.loadGLB(modelUrl)
@@ -586,47 +632,95 @@ export class GameEngine {
     const group = new THREE.Group();
     group.name = "portalIcon";
 
-    // Ring geometry
-    const ringGeo = new THREE.TorusGeometry(2, 0.3, 16, 32);
+    // Glowing torus ring
     const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.25, 16, 48), ringMat);
     group.add(ring);
 
-    // Outer glow ring
-    const glowGeo = new THREE.TorusGeometry(2.4, 0.5, 16, 32);
-    const glowMat = new THREE.MeshBasicMaterial({
+    // Outer glow ring (animated opacity)
+    const outerGlowMat = new THREE.MeshBasicMaterial({
       color: 0x00ffcc,
       transparent: true,
       opacity: 0.3,
     });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    group.add(glow);
+    outerGlowMat.name = "outerGlowMat";
+    const outerGlow = new THREE.Mesh(new THREE.TorusGeometry(2.9, 0.4, 16, 48), outerGlowMat);
+    outerGlow.name = "outerGlowRing";
+    group.add(outerGlow);
 
-    // Center sphere (portal)
-    const sphereGeo = new THREE.SphereGeometry(1.2, 16, 16);
-    const sphereMat = new THREE.MeshBasicMaterial({
-      color: 0x004488,
-      transparent: true,
-      opacity: 0.8,
-    });
-    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-    group.add(sphere);
+    // Icon — show project favicon/logo if available, otherwise default sphere
+    if (island.projectIconUrl) {
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        island.projectIconUrl,
+        (texture) => {
+          // Glow border quad — slightly larger, behind icon
+          const borderMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffcc,
+            transparent: true,
+            opacity: 0.55,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          });
+          const border = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 3.0), borderMat);
+          border.name = "iconGlow";
+          border.position.z = -0.08;
+          group.add(border);
 
-    // Particles orbiting
-    const orbitCount = 30;
+          // Extra outer soft glow
+          const softGlowMat = new THREE.MeshBasicMaterial({
+            color: 0x44ffdd,
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          });
+          const softGlow = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), softGlowMat);
+          softGlow.name = "iconSoftGlow";
+          softGlow.position.z = -0.12;
+          group.add(softGlow);
+
+          // Icon plane
+          const iconMat = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide,
+            alphaTest: 0.05,
+          });
+          const icon = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), iconMat);
+          icon.name = "iconPlane";
+          group.add(icon);
+        },
+        undefined,
+        () => {
+          // Fallback to default sphere if favicon fails to load
+          const sphereMat = new THREE.MeshBasicMaterial({ color: 0x004488, transparent: true, opacity: 0.8 });
+          group.add(new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), sphereMat));
+        }
+      );
+    } else {
+      const sphereMat = new THREE.MeshBasicMaterial({ color: 0x004488, transparent: true, opacity: 0.8 });
+      group.add(new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), sphereMat));
+    }
+
+    // Orbiting particles
+    const orbitCount = 40;
     const orbitPos = new Float32Array(orbitCount * 3);
     for (let i = 0; i < orbitCount; i++) {
       const angle = (i / orbitCount) * Math.PI * 2;
-      orbitPos[i * 3] = Math.cos(angle) * 3;
-      orbitPos[i * 3 + 1] = (Math.random() - 0.5) * 1;
-      orbitPos[i * 3 + 2] = Math.sin(angle) * 3;
+      orbitPos[i * 3] = Math.cos(angle) * 3.5;
+      orbitPos[i * 3 + 1] = (Math.random() - 0.5) * 1.2;
+      orbitPos[i * 3 + 2] = Math.sin(angle) * 3.5;
     }
     const orbitGeo = new THREE.BufferGeometry();
     orbitGeo.setAttribute("position", new THREE.BufferAttribute(orbitPos, 3));
     const orbitMat = new THREE.PointsMaterial({
       color: 0x00ffcc,
-      size: 0.15,
+      size: 0.18,
       transparent: true,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -814,9 +908,9 @@ export class GameEngine {
 
     // Camera follow
     const cameraOffset = new THREE.Vector3(
-      -Math.sin(gs.playerRotation) * 28,
-      12,
-      -Math.cos(gs.playerRotation) * 28
+      -Math.sin(gs.playerRotation) * 55,
+      22,
+      -Math.cos(gs.playerRotation) * 55
     );
     this.camera.position.lerp(
       this.playerShip.position.clone().add(cameraOffset),
@@ -1077,15 +1171,34 @@ export class GameEngine {
       // Animate portal icon
       const portal = group.getObjectByName(`portal_${state.id}`) as THREE.Group;
       if (portal) {
-        portal.rotation.y = time * 0.8;
-        portal.position.y = 10 + Math.sin(time * 1.5) * 1.2;
-        portal.children.forEach((child) => {
-          if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
-            if (child.geometry.type === "TorusGeometry") {
-              child.material.opacity = 0.3 + Math.sin(time * 2) * 0.15;
-            }
-          }
-        });
+        portal.rotation.y = time * 0.7;
+        portal.position.y = 10 + Math.sin(time * 1.4) * 1.4;
+
+        // Pulse outer glow ring
+        const outerRing = portal.getObjectByName("outerGlowRing") as THREE.Mesh | undefined;
+        if (outerRing && outerRing.material instanceof THREE.MeshBasicMaterial) {
+          outerRing.material.opacity = 0.15 + Math.sin(time * 2.2) * 0.12;
+        }
+
+        // Pulse icon glow border
+        const iconGlow = portal.getObjectByName("iconGlow") as THREE.Mesh | undefined;
+        if (iconGlow && iconGlow.material instanceof THREE.MeshBasicMaterial) {
+          iconGlow.material.opacity = 0.4 + Math.sin(time * 2.8) * 0.18;
+        }
+        const iconSoftGlow = portal.getObjectByName("iconSoftGlow") as THREE.Mesh | undefined;
+        if (iconSoftGlow && iconSoftGlow.material instanceof THREE.MeshBasicMaterial) {
+          iconSoftGlow.material.opacity = 0.12 + Math.sin(time * 1.8) * 0.08;
+        }
+
+        // Keep icon facing camera (billboard)
+        const iconPlane = portal.getObjectByName("iconPlane") as THREE.Mesh | undefined;
+        if (iconPlane) {
+          iconPlane.lookAt(this.camera.position);
+          const iconGlowPlane = portal.getObjectByName("iconGlow") as THREE.Mesh | undefined;
+          if (iconGlowPlane) iconGlowPlane.lookAt(this.camera.position);
+          const softGlowPlane = portal.getObjectByName("iconSoftGlow") as THREE.Mesh | undefined;
+          if (softGlowPlane) softGlowPlane.lookAt(this.camera.position);
+        }
       }
 
       // Check proximity

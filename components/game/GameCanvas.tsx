@@ -27,6 +27,7 @@ interface ProjectData {
   description: string;
   url: string;
   iconUrl?: string;
+  imageUrl?: string;
 }
 
 interface IslandData {
@@ -129,7 +130,8 @@ export default function GameCanvas() {
             projectUrl: isl.projects?.[0]?.url,
             projectTitle: isl.projects?.[0]?.title,
             projectDescription: isl.projects?.[0]?.description,
-            projectIconUrl: isl.projects?.[0]?.iconUrl,
+            projectIconUrl: resolveFileUrl(isl.projects?.[0]?.iconUrl),
+            projectImageUrl: resolveFileUrl(isl.projects?.[0]?.imageUrl),
             isDiscovered: false,
           })
         );

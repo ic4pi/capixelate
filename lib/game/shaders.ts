@@ -121,6 +121,7 @@ export const waterFragmentShader = `
   uniform float uTime;
   uniform vec3 uFoamColor;
   uniform float uFoamThreshold;
+  uniform vec3 uMoonPosition;
   
   varying vec2 vUv;
   varying float vElevation;
@@ -137,10 +138,21 @@ export const waterFragmentShader = `
     float foamFactor = smoothstep(uFoamThreshold - 0.05, uFoamThreshold, vElevation);
     color = mix(color, uFoamColor, foamFactor * 0.6);
     
-    // Specular highlight from moon
-    vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
-    float spec = pow(max(dot(vNormal, lightDir), 0.0), 32.0);
-    color += vec3(spec * 0.3);
+    // Moon reflection — direction from water surface point toward the moon
+    vec3 toMoon = normalize(uMoonPosition - vWorldPosition);
+    float nDotM = max(dot(vNormal, toMoon), 0.0);
+    
+    // Wide soft path across the water (low exponent = broad streak)
+    float moonPath = pow(nDotM, 3.0);
+    color += vec3(0.55, 0.65, 1.0) * moonPath * 0.45;
+    
+    // Sharper specular highlights (medium exponent = visible sparkle band)
+    float moonSpec = pow(nDotM, 40.0);
+    color += vec3(0.9, 0.95, 1.0) * moonSpec * 1.8;
+    
+    // Tight glitter on wave peaks
+    float moonGlitter = pow(nDotM, 180.0) * (0.6 + vElevation * 3.0);
+    color += vec3(1.0, 1.0, 1.0) * moonGlitter * 4.0;
     
     // Depth-based transparency at edges
     float alpha = 0.88 + foamFactor * 0.12;

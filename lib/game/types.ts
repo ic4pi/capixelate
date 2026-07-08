@@ -52,6 +52,7 @@ export interface IslandState {
   projectTitle?: string;
   projectDescription?: string;
   projectIconUrl?: string;
+  projectImageUrl?: string;
   isDiscovered: boolean;
   mesh?: THREE.Object3D;
 }
