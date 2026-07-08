@@ -5,36 +5,36 @@ const GameCanvas = dynamic(() => import("@/components/game/GameCanvas"), {
   ssr: false,
   loading: () => (
     <div
-      className="w-full h-full flex flex-col items-center justify-center"
-      style={{ background: "radial-gradient(ellipse at center, #0d0900 0%, #050400 100%)" }}
+      style={{
+        width: "100%", height: "100%",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        background: "radial-gradient(ellipse at center, #0d0900 0%, #050400 100%)",
+      }}
     >
       <div
-        className="text-5xl font-bold tracking-[0.35em] mb-1 px-4 text-center"
-        style={{ fontFamily: "serif", color: "#f59e0b", textShadow: "0 0 40px #f59e0b99, 0 0 80px #f59e0b44" }}
+        style={{
+          fontFamily: "serif", fontWeight: "bold",
+          fontSize: "clamp(2.2rem, 9vw, 4.5rem)",
+          letterSpacing: "0.35em", paddingLeft: "0.35em",
+          color: "#f59e0b",
+          textShadow: "0 0 20px #f59e0b, 0 0 50px #f59e0bbb, 0 0 100px #f59e0b66",
+          marginBottom: "12px", textAlign: "center",
+        }}
       >
         CAPIXELATE
       </div>
-      <div className="text-xs tracking-[0.4em] uppercase mb-12" style={{ color: "#92400e" }}>
+      <div style={{ fontFamily: "monospace", fontSize: "11px", letterSpacing: "0.4em", color: "#92400e", marginBottom: "40px" }}>
         Portfolio Seas
       </div>
-      {/* Glowing yellow progress bar */}
-      <div className="relative w-48 h-1.5 rounded-full overflow-hidden" style={{ background: "#1c0d00" }}>
-        <div
-          className="absolute top-0 h-full rounded-full"
-          style={{
-            width: "45%",
-            background: "linear-gradient(90deg, #b45309, #f59e0b, #fde68a)",
-            boxShadow: "0 0 14px #f59e0b, 0 0 28px #f59e0b66",
-            animation: "page-progress 1.8s ease-in-out infinite",
-          }}
-        />
+      <div style={{ width: "clamp(180px,40vw,260px)", height: "5px", background: "#1c0a00", borderRadius: "3px", overflow: "hidden" }}>
+        <div style={{
+          height: "100%", width: "40%", borderRadius: "3px", background: "#f59e0b",
+          boxShadow: "0 0 14px #f59e0b, 0 0 30px #f59e0baa",
+          animation: "pg 1.8s ease-in-out infinite",
+        }} />
       </div>
-      <style>{`
-        @keyframes page-progress {
-          0%   { left: -45%; }
-          100% { left: 100%; }
-        }
-      `}</style>
+      <style>{`@keyframes pg { 0%{margin-left:-40%} 100%{margin-left:100%} }`}</style>
     </div>
   ),
 });
