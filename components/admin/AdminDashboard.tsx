@@ -3,11 +3,9 @@ import { useState, useEffect, useRef } from "react";
 
 // When deployed in split mode (Vercel frontend + Render backend), all data API
 // calls must go to Render where the persistent database and file uploads live.
-// NEXT_PUBLIC_API_BASE_URL is set on Vercel to the Render service URL.
-const API_BASE =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "")
-    : "";
+// Set NEXT_PUBLIC_API_BASE_URL on Vercel to point to the Render service URL.
+// NEXT_PUBLIC_* variables are inlined at build time — no runtime lookup needed.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 function apiUrl(path: string) {
   return `${API_BASE}${path}`;
