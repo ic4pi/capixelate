@@ -906,6 +906,30 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 const inputCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500 text-sm";
 const selectCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500 text-sm";
 
+/** Compress a File using the browser's built-in gzip CompressionStream. */
+async function gzipFile(file: File): Promise<File> {
+  const stream = file.stream().pipeThrough(new CompressionStream("gzip"));
+  const blob = await new Response(stream).blob();
+  // Keep the original filename; server strips .gz before saving
+  return new File([blob], file.name + ".gz", { type: "application/gzip" });
+}
+
+/** POST formData to a URL and return parsed JSON, or throw a readable error. */
+async function postUpload(url: string, fd: FormData): Promise<{ url: string }> {
+  const res = await fetch(url, { method: "POST", body: fd });
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    if (res.status === 413) throw new Error("File too large (>4.5 MB) for this upload path.");
+    throw new Error(`HTTP ${res.status} — server returned non-JSON. Check Render logs.`);
+  }
+  const data = await res.json();
+  if (!data.url) throw new Error(data.error ?? "No URL in response");
+  return data;
+}
+
+// 4 MB — safe headroom under Vercel's 4.5 MB serverless limit
+const PROXY_LIMIT = 4 * 1024 * 1024;
+
 function FileUploadField({ label, category, currentUrl, onUpload }: {
   label: string;
   category: string;
@@ -913,34 +937,55 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
   onUpload: (url: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [status, setStatus] = useState("");
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setStatus("");
+
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("category", category);
-      // Always upload through the local /api/upload route — on Vercel this
-      // proxies to Render; on Render it saves directly. This avoids cross-origin
-      // issues and cold-start timeouts when hitting Render directly from mobile.
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const ct = res.headers.get("content-type") ?? "";
-      if (!ct.includes("application/json")) {
-        // Vercel returns HTML on 413 (file too large) or other infra errors
-        if (res.status === 413) {
-          alert("File is too large for the upload proxy (>4.5 MB). Try a smaller or compressed .glb file.");
-        } else {
-          alert(`Upload failed (HTTP ${res.status}). Check that your Render service is running and NEXT_PUBLIC_API_BASE_URL is set correctly.`);
-        }
-        return;
+      let uploadFile = file;
+      const isGlb = /\.(glb|gltf)$/i.test(file.name);
+
+      // --- Step 1: compress GLB/GLTF in-browser ---
+      if (isGlb && file.size > 512 * 1024) {
+        setStatus(`Compressing… (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+        uploadFile = await gzipFile(file);
+        const savings = Math.round((1 - uploadFile.size / file.size) * 100);
+        setStatus(`Compressed ${savings}% · uploading…`);
+      } else {
+        setStatus("Uploading…");
       }
-      const data = await res.json();
-      if (data.url) onUpload(data.url);
-      else alert(`Upload failed: ${data.error ?? "unknown error"}`);
+
+      // --- Step 2: choose upload path ---
+      const fd = new FormData();
+      fd.append("file", uploadFile);
+      fd.append("category", category);
+
+      let data: { url: string };
+
+      if (uploadFile.size <= PROXY_LIMIT) {
+        // Small enough for the Vercel proxy
+        data = await postUpload("/api/upload", fd);
+      } else {
+        // Too large for Vercel — go directly to Render
+        if (!API_BASE) {
+          throw new Error(
+            "File is still large after compression and NEXT_PUBLIC_API_BASE_URL is not set. " +
+            "Set that variable on Vercel to enable direct-to-Render uploads."
+          );
+        }
+        setStatus(`Large file — uploading directly to Render… (may take ~30 s if service is sleeping)`);
+        data = await postUpload(`${API_BASE}/api/upload`, fd);
+      }
+
+      onUpload(data.url);
+      setStatus("✓ Uploaded");
     } catch (err) {
       alert(`Upload error: ${err}`);
+      setStatus("");
     } finally {
       setUploading(false);
     }
@@ -949,9 +994,20 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
   return (
     <FormField label={label}>
       <div className="space-y-2">
-        <input type="file" onChange={handleChange} className="block text-sm text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600 cursor-pointer" />
-        {uploading && <div className="text-xs text-cyan-400 animate-pulse">Uploading...</div>}
-        {currentUrl && <div className="text-xs text-purple-400 truncate">✓ {currentUrl}</div>}
+        <input
+          type="file"
+          onChange={handleChange}
+          disabled={uploading}
+          className="block text-sm text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600 cursor-pointer disabled:opacity-50"
+        />
+        {status && (
+          <div className={`text-xs font-mono ${status.startsWith("✓") ? "text-green-400" : "text-cyan-400 animate-pulse"}`}>
+            {status}
+          </div>
+        )}
+        {currentUrl && !status && (
+          <div className="text-xs text-purple-400 truncate">✓ {currentUrl}</div>
+        )}
       </div>
     </FormField>
   );

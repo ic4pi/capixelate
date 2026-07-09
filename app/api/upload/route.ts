@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
+import { gunzipSync } from "zlib";
 import { v4 as uuidv4 } from "uuid";
 
 const UPLOAD_DIR =
@@ -15,6 +16,14 @@ async function ensureDir(subDir: string) {
   return dir;
 }
 
+/** Detect gzip magic bytes (1f 8b) and decompress if present. */
+function maybeDecompress(buf: Buffer): Buffer {
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    return gunzipSync(buf);
+  }
+  return buf;
+}
+
 export async function POST(req: NextRequest) {
   // When running on Vercel (no persistent UPLOAD_DIR) proxy to Render backend
   const remoteBase = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -25,6 +34,14 @@ export async function POST(req: NextRequest) {
         method: "POST",
         body: formData,
       });
+      if (!upstream.ok) {
+        const text = await upstream.text().catch(() => "");
+        console.error("Proxy upstream error:", upstream.status, text.slice(0, 200));
+        return NextResponse.json(
+          { error: `Upload proxy failed (${upstream.status})` },
+          { status: upstream.status }
+        );
+      }
       const data = await upstream.json();
       return NextResponse.json(data, { status: upstream.status });
     } catch (err) {
@@ -44,17 +61,20 @@ export async function POST(req: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Decompress if the browser gzip-compressed the file before sending
+    const buffer = maybeDecompress(Buffer.from(bytes));
 
-    const ext = file.name.split(".").pop() ?? "bin";
+    // Strip any .gz suffix added by the client — always store the real extension
+    const baseName = file.name.replace(/\.gz$/i, "");
+    const ext = baseName.split(".").pop() ?? "bin";
     const filename = `${uuidv4()}.${ext}`;
     const dir = await ensureDir(category);
     await writeFile(join(dir, filename), buffer);
 
     const url = `/api/files/${category}/${filename}`;
-    return NextResponse.json({ url, filename, originalName: file.name });
+    return NextResponse.json({ url, filename, originalName: baseName });
   } catch (err) {
     console.error("Upload error:", err);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
