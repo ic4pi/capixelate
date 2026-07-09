@@ -5,9 +5,11 @@ import type { GameState, IslandState } from "@/lib/game/types";
 interface GameHUDProps {
   hudState: Partial<GameState>;
   nearbyIsland: IslandState | null;
+  onIsland: boolean;
   onSailToIsland: () => void;
   onPortalClick: () => void;
   onDock: () => void;
+  onLeaveIsland: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onToggleCam: () => void;
@@ -19,9 +21,11 @@ interface GameHUDProps {
 export default function GameHUD({
   hudState,
   nearbyIsland,
+  onIsland,
   onSailToIsland,
   onPortalClick,
   onDock,
+  onLeaveIsland,
   onZoomIn,
   onZoomOut,
   onToggleCam,
@@ -337,9 +341,9 @@ export default function GameHUD({
         </div>
       )}
 
-      {/* ===== SAIL TO ISLAND BUTTON ===== */}
-      {!isMobile && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+      {/* ===== SAIL / DOCK BUTTONS (desktop) ===== */}
+      {!isMobile && !onIsland && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-3">
           <button
             onClick={onSailToIsland}
             className="px-6 py-3 bg-amber-900/60 hover:bg-amber-700/70 border border-amber-400/40 hover:border-amber-400/80 rounded-xl text-amber-300 text-sm font-bold tracking-widest transition-all duration-200 backdrop-blur-sm"
@@ -347,6 +351,53 @@ export default function GameHUD({
           >
             ⚓ SAIL TO NEAREST ISLAND
           </button>
+          {nearbyIsland && (
+            <button
+              onClick={onDock}
+              className="px-6 py-3 rounded-xl text-sm font-bold tracking-widest transition-all duration-200 backdrop-blur-sm"
+              style={{
+                background: "rgba(0,20,15,0.85)",
+                border: "1.5px solid #00ffcc99",
+                color: "#00ffcc",
+                boxShadow: "0 0 20px #00ffcc44",
+                textShadow: "0 0 10px #00ffcc88",
+              }}
+            >
+              🏝 DOCK &amp; EXPLORE
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ===== ON-ISLAND BANNER (top of screen when walking on island) ===== */}
+      {onIsland && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+          <div
+            className="flex items-center gap-3 px-5 py-2.5 rounded-2xl"
+            style={{
+              background: "rgba(0,0,0,0.78)",
+              border: "1.5px solid #00ffcc88",
+              boxShadow: "0 0 24px #00ffcc33",
+            }}
+          >
+            <span className="text-cyan-300 text-sm font-mono tracking-widest">
+              🏝 EXPLORING ISLAND
+            </span>
+            <span className="text-slate-500 text-xs font-mono">
+              WASD / arrows to walk
+            </span>
+            <button
+              onClick={onLeaveIsland}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg ml-2"
+              style={{
+                background: "rgba(180,30,30,0.7)",
+                border: "1px solid #ef444466",
+                color: "#fca5a5",
+              }}
+            >
+              ✕ LEAVE
+            </button>
+          </div>
         </div>
       )}
 
@@ -356,10 +407,12 @@ export default function GameHUD({
           onTouchInput={onTouchInput}
           onSailToIsland={onSailToIsland}
           onDock={onDock}
+          onLeaveIsland={onLeaveIsland}
           onZoomIn={onZoomIn}
           onZoomOut={onZoomOut}
           onToggleCam={onToggleCam}
           nearIsland={!!nearbyIsland}
+          onIsland={onIsland}
         />
       )}
 
@@ -538,20 +591,24 @@ interface MobileTouchControlsProps {
   onTouchInput: (key: TouchKey, pressed: boolean) => void;
   onSailToIsland: () => void;
   onDock: () => void;
+  onLeaveIsland: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onToggleCam: () => void;
   nearIsland: boolean;
+  onIsland: boolean;
 }
 
 function MobileTouchControls({
   onTouchInput,
   onSailToIsland,
   onDock,
+  onLeaveIsland,
   onZoomIn,
   onZoomOut,
   onToggleCam,
   nearIsland,
+  onIsland,
 }: MobileTouchControlsProps) {
   const [camMode, setCamMode] = useState(0);
 
@@ -653,8 +710,21 @@ function MobileTouchControls({
           </button>
         </div>
 
-        {/* Sail / Dock button */}
-        {nearIsland ? (
+        {/* Sail / Dock / Leave button */}
+        {onIsland ? (
+          <button
+            onClick={onLeaveIsland}
+            className="text-[11px] font-bold tracking-wide px-3 py-2 rounded-lg"
+            style={{
+              background: "rgba(120,10,10,0.85)",
+              border: "1.5px solid #ef444488",
+              color: "#fca5a5",
+              boxShadow: "0 0 14px #ef444433",
+            }}
+          >
+            ✕ LEAVE
+          </button>
+        ) : nearIsland ? (
           <button
             onClick={onDock}
             className="text-[11px] font-bold tracking-wide px-3 py-2 rounded-lg"
@@ -665,7 +735,7 @@ function MobileTouchControls({
               boxShadow: "0 0 14px #00ffcc44",
             }}
           >
-            ⚓ DOCK
+            🏝 DOCK
           </button>
         ) : (
           <button

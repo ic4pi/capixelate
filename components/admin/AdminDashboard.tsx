@@ -926,6 +926,16 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
       // proxies to Render; on Render it saves directly. This avoids cross-origin
       // issues and cold-start timeouts when hitting Render directly from mobile.
       const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("application/json")) {
+        // Vercel returns HTML on 413 (file too large) or other infra errors
+        if (res.status === 413) {
+          alert("File is too large for the upload proxy (>4.5 MB). Try a smaller or compressed .glb file.");
+        } else {
+          alert(`Upload failed (HTTP ${res.status}). Check that your Render service is running and NEXT_PUBLIC_API_BASE_URL is set correctly.`);
+        }
+        return;
+      }
       const data = await res.json();
       if (data.url) onUpload(data.url);
       else alert(`Upload failed: ${data.error ?? "unknown error"}`);

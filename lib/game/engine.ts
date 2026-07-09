@@ -58,6 +58,16 @@ export class GameEngine {
   // 1 = hover/cinematic follow cam (scroll changes distance back, always level)
   private cameraMode = 0;
 
+  // On-island walk mode — activated by the Dock button
+  private islandWalkMode = false;
+  private islandWalkCenter = new THREE.Vector3();
+  private islandWalkAngle = 0;   // orbit angle around island center (radians)
+  private islandWalkRadius = 50; // distance from island center (units)
+  private readonly ISLAND_SURFACE_Y = 4.5; // top of island terrain
+
+  /** Called when player changes between sailing and on-island walking. */
+  onIslandModeChange?: (active: boolean) => void;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -513,13 +523,13 @@ export class GameEngine {
     const terrain = new THREE.Group();
     terrain.name = "terrain";
 
-    // Island body — significantly larger so there's room to explore and
-    // the campfire / portal icons feel appropriately monumental
+    // Island body — LARGE flat landmass you can walk across.
+    // Wide circumference is the priority; height kept modest.
     const islandGeo = new THREE.CylinderGeometry(
-      island.scale * 30,   // top radius  (was 18)
-      island.scale * 38,   // bottom radius (was 22)
-      island.scale * 10,   // height (was 6)
-      16,
+      island.scale * 65,   // top radius  — very wide
+      island.scale * 80,   // bottom radius
+      island.scale * 10,   // height (unchanged — not taller)
+      20,
       3
     );
     const islandMat = new THREE.MeshLambertMaterial({ color: 0x3d6b1a });
@@ -529,37 +539,36 @@ export class GameEngine {
     islandMesh.receiveShadow = true;
     terrain.add(islandMesh);
 
-    // Wide sandy beach ring
+    // Wide sandy beach fringe
     const beachGeo = new THREE.CylinderGeometry(
-      island.scale * 38,   // top radius (was 22)
-      island.scale * 44,   // bottom radius (was 24)
-      island.scale * 2,    // height (was 1.5)
-      16
+      island.scale * 80,
+      island.scale * 90,
+      island.scale * 2,
+      20
     );
     const beachMat = new THREE.MeshLambertMaterial({ color: 0xd4b483 });
     const beach = new THREE.Mesh(beachGeo, beachMat);
     beach.position.y = -5;
     terrain.add(beach);
 
-    // More trees spread further from center
-    const treeCount = 12;
+    // Ring of trees near the island edge — gives visual depth as you walk inward
+    const treeCount = 18;
     for (let i = 0; i < treeCount; i++) {
-      const angle = (i / treeCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-      const r = island.scale * (16 + Math.random() * 10);
+      const angle = (i / treeCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      const r = island.scale * (42 + Math.random() * 16);
       const treeGroup = new THREE.Group();
 
-      // Larger trunks for bigger island scale
-      const trunkH = 5 + Math.random() * 3;
-      const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, trunkH, 6);
+      const trunkH = 6 + Math.random() * 4;
+      const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, trunkH, 6);
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
       trunk.position.y = trunkH / 2;
       treeGroup.add(trunk);
 
-      const leavesGeo = new THREE.ConeGeometry(3.5, 7, 6);
+      const leavesGeo = new THREE.ConeGeometry(4, 8, 6);
       const leavesMat = new THREE.MeshLambertMaterial({ color: 0x2d7a1c });
       const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-      leaves.position.y = trunkH + 3;
+      leaves.position.y = trunkH + 4;
       treeGroup.add(leaves);
 
       treeGroup.position.set(Math.cos(angle) * r, 4, Math.sin(angle) * r);
@@ -576,16 +585,16 @@ export class GameEngine {
     // Terrain (procedural, may be replaced by GLB)
     group.add(this.buildProceduralIslandTerrain(island));
 
-    // Campfire sits on top of the taller island (terrain top at ~y=4)
+    // Campfire at island center — on top of terrain (surface y ≈ 4.5)
     const campfireGroup = this.createCampfire(island.scale);
     campfireGroup.name = "campfire";
     campfireGroup.position.set(0, 4.5, 0);
     group.add(campfireGroup);
 
-    // Project portal icon — higher above the bigger island terrain
+    // Project portal icon floats above the campfire
     if (island.projectUrl || island.id) {
       const portalGroup = this.createPortalIcon(island);
-      portalGroup.position.set(0, 16, 0);
+      portalGroup.position.set(0, 18, 0);
       portalGroup.name = `portal_${island.id}`;
       group.add(portalGroup);
     }
@@ -901,12 +910,49 @@ export class GameEngine {
     this._nearIsland = near;
     if (near && pos) {
       this._nearIslandPos = new THREE.Vector3(pos.x, 0, pos.z);
-      // Gently zoom out so the whole island scene is visible
-      this.zoomTarget = Math.max(this.zoomTarget, 0.38);
+      this.zoomTarget = Math.max(this.zoomTarget, 0.3);
     } else {
       this._nearIslandPos = null;
-      this.zoomTarget = 0;
+      if (!this.islandWalkMode) this.zoomTarget = 0;
     }
+  }
+
+  /**
+   * Place the player ON the island in walk mode.
+   * Controls (WASD/arrows) now orbit and approach the island center
+   * instead of sailing the ship. The ship stays parked.
+   */
+  dockAtIsland() {
+    if (!this._nearIslandPos) return;
+    this.islandWalkMode = true;
+    this.gameState.gamePhase = "docked";
+    this.stopMovement();
+
+    // Island center on its surface
+    this.islandWalkCenter.set(
+      this._nearIslandPos.x,
+      this.ISLAND_SURFACE_Y,
+      this._nearIslandPos.z
+    );
+
+    // Start at the ship's current position around the island
+    const dx = this._nearIslandPos.x - this.playerShip.position.x;
+    const dz = this._nearIslandPos.z - this.playerShip.position.z;
+    this.islandWalkAngle = Math.atan2(dx, dz) + Math.PI; // face toward center
+    this.islandWalkRadius = Math.min(
+      Math.sqrt(dx * dx + dz * dz),
+      80 // cap at beach edge
+    );
+
+    if (this.onIslandModeChange) this.onIslandModeChange(true);
+  }
+
+  /** Return to the ship from island walk mode. */
+  leaveIsland() {
+    if (!this.islandWalkMode) return;
+    this.islandWalkMode = false;
+    this.gameState.gamePhase = "sailing";
+    if (this.onIslandModeChange) this.onIslandModeChange(false);
   }
 
   /**
@@ -987,6 +1033,27 @@ export class GameEngine {
     const flag = this.playerShip.getObjectByName("flag");
     if (flag) {
       flag.rotation.y = Math.sin(time * 3) * 0.4;
+    }
+
+    // ── On-island walk mode ────────────────────────────────────────────────
+    // When docked the ship is frozen; player walks around the island using the
+    // same WASD controls. Camera follows at ground level looking toward center.
+    if (this.islandWalkMode) {
+      const walkSpeed   = 18;
+      const approachSpd = 20;
+
+      if (input.left)     this.islandWalkAngle += (walkSpeed / Math.max(this.islandWalkRadius, 10)) * delta;
+      if (input.right)    this.islandWalkAngle -= (walkSpeed / Math.max(this.islandWalkRadius, 10)) * delta;
+      if (input.forward)  this.islandWalkRadius = Math.max(4,  this.islandWalkRadius - approachSpd * delta);
+      if (input.backward) this.islandWalkRadius = Math.min(90, this.islandWalkRadius + approachSpd * delta);
+
+      // Camera sits behind the walker and looks at the campfire/portal
+      const camDist = this.islandWalkRadius + 14;
+      const camX = this.islandWalkCenter.x + Math.sin(this.islandWalkAngle) * camDist;
+      const camZ = this.islandWalkCenter.z + Math.cos(this.islandWalkAngle) * camDist;
+      this.camera.position.lerp(new THREE.Vector3(camX, this.islandWalkCenter.y + 5, camZ), 0.1);
+      this.camera.lookAt(this.islandWalkCenter.x, this.islandWalkCenter.y + 6, this.islandWalkCenter.z);
+      return; // skip ship camera code
     }
 
     // Camera follow
@@ -1319,7 +1386,7 @@ export class GameEngine {
       const portal = group.getObjectByName(`portal_${state.id}`) as THREE.Group;
       if (portal) {
         portal.rotation.y = time * 0.7;
-        portal.position.y = 16 + Math.sin(time * 1.4) * 1.8;
+        portal.position.y = 18 + Math.sin(time * 1.4) * 2;
 
         // Pulse outer glow ring
         const outerRing = portal.getObjectByName("outerGlowRing") as THREE.Mesh | undefined;
@@ -1348,12 +1415,12 @@ export class GameEngine {
         }
       }
 
-      // Check proximity — wider radius to match the bigger island footprint
+      // Check proximity — matches the much bigger island beach radius
       const dx = state.position.x - this.playerShip.position.x;
       const dz = state.position.z - this.playerShip.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < 60) {
-        // Auto-stop the auto-sail when we've arrived — prevents drift past the island
+      if (dist < 110) {
+        // Auto-stop the auto-sail when we've arrived at the beach
         if (this.inputState.sailToIsland) {
           this.inputState.sailToIsland = false;
           this.gameState.playerSpeed *= 0.15;

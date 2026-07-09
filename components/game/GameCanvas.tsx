@@ -77,6 +77,7 @@ export default function GameCanvas() {
     enemies: [],
   });
   const [nearbyIsland, setNearbyIsland] = useState<IslandState | null>(null);
+  const [onIsland, setOnIsland] = useState(false);
   const [activeProject, setActiveProject] = useState<{
     title: string;
     description: string;
@@ -105,7 +106,11 @@ export default function GameCanvas() {
   }, [nearbyIsland]);
 
   const handleDock = useCallback(() => {
-    engineRef.current?.stopMovement();
+    engineRef.current?.dockAtIsland();
+  }, []);
+
+  const handleLeaveIsland = useCallback(() => {
+    engineRef.current?.leaveIsland();
   }, []);
 
   const handleZoomIn = useCallback(() => {
@@ -205,6 +210,7 @@ export default function GameCanvas() {
         engine.onStateUpdate = (state) =>
           setHudState((prev) => ({ ...prev, ...state }));
         engine.onIslandProximity = handleIslandProximity;
+        engine.onIslandModeChange = (active) => setOnIsland(active);
         engineRef.current = engine;
 
         await engine.init(islandsData, enemiesData, playerShipModelUrl);
@@ -216,6 +222,7 @@ export default function GameCanvas() {
         engine.onStateUpdate = (state) =>
           setHudState((prev) => ({ ...prev, ...state }));
         engine.onIslandProximity = handleIslandProximity;
+        engine.onIslandModeChange = (active) => setOnIsland(active);
         engineRef.current = engine;
 
         const defaultIslands: IslandState[] = [
@@ -269,7 +276,7 @@ export default function GameCanvas() {
         const { playerPosition } = engineRef.current.gameState;
         const dx = prev.position.x - playerPosition.x;
         const dz = prev.position.z - playerPosition.z;
-        return Math.sqrt(dx * dx + dz * dz) > 80 ? null : prev;
+        return Math.sqrt(dx * dx + dz * dz) > 160 ? null : prev;
       });
     }, 500);
     return () => clearInterval(interval);
@@ -299,9 +306,11 @@ export default function GameCanvas() {
         <GameHUD
           hudState={hudState}
           nearbyIsland={nearbyIsland}
+          onIsland={onIsland}
           onSailToIsland={handleSailToIsland}
           onPortalClick={handlePortalClick}
           onDock={handleDock}
+          onLeaveIsland={handleLeaveIsland}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           onToggleCam={handleToggleCam}
