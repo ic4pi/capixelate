@@ -108,6 +108,18 @@ export default function GameCanvas() {
     engineRef.current?.stopMovement();
   }, []);
 
+  const handleZoomIn = useCallback(() => {
+    engineRef.current?.adjustZoom(-0.2);
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    engineRef.current?.adjustZoom(0.2);
+  }, []);
+
+  const handleToggleCam = useCallback(() => {
+    engineRef.current?.toggleCameraMode();
+  }, []);
+
   // Called when user clicks Set Sail or Go Directly to Island
   const handleIntroStart = useCallback((sailDirectly: boolean) => {
     setShowIntro(false);
@@ -257,7 +269,7 @@ export default function GameCanvas() {
         const { playerPosition } = engineRef.current.gameState;
         const dx = prev.position.x - playerPosition.x;
         const dz = prev.position.z - playerPosition.z;
-        return Math.sqrt(dx * dx + dz * dz) > 50 ? null : prev;
+        return Math.sqrt(dx * dx + dz * dz) > 80 ? null : prev;
       });
     }, 500);
     return () => clearInterval(interval);
@@ -290,6 +302,9 @@ export default function GameCanvas() {
           onSailToIsland={handleSailToIsland}
           onPortalClick={handlePortalClick}
           onDock={handleDock}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onToggleCam={handleToggleCam}
           activeProject={activeProject}
           onCloseProject={() => setActiveProject(null)}
           onTouchInput={handleTouchInput}

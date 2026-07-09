@@ -54,6 +54,10 @@ export class GameEngine {
   private _nearIsland = false;
   private _nearIslandPos: THREE.Vector3 | null = null;
 
+  // 0 = deck/crow's-nest (scroll changes height)
+  // 1 = hover/cinematic follow cam (scroll changes distance back, always level)
+  private cameraMode = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -459,6 +463,9 @@ export class GameEngine {
           this.inputState.fire = true;
           e.preventDefault();
           break;
+        case "KeyC":
+          this.toggleCameraMode();
+          break;
       }
     };
     const keyUp = (e: KeyboardEvent) => {
@@ -506,11 +513,13 @@ export class GameEngine {
     const terrain = new THREE.Group();
     terrain.name = "terrain";
 
+    // Island body — significantly larger so there's room to explore and
+    // the campfire / portal icons feel appropriately monumental
     const islandGeo = new THREE.CylinderGeometry(
-      island.scale * 18,
-      island.scale * 22,
-      island.scale * 6,
-      12,
+      island.scale * 30,   // top radius  (was 18)
+      island.scale * 38,   // bottom radius (was 22)
+      island.scale * 10,   // height (was 6)
+      16,
       3
     );
     const islandMat = new THREE.MeshLambertMaterial({ color: 0x3d6b1a });
@@ -520,35 +529,40 @@ export class GameEngine {
     islandMesh.receiveShadow = true;
     terrain.add(islandMesh);
 
+    // Wide sandy beach ring
     const beachGeo = new THREE.CylinderGeometry(
-      island.scale * 22,
-      island.scale * 24,
-      island.scale * 1.5,
-      12
+      island.scale * 38,   // top radius (was 22)
+      island.scale * 44,   // bottom radius (was 24)
+      island.scale * 2,    // height (was 1.5)
+      16
     );
     const beachMat = new THREE.MeshLambertMaterial({ color: 0xd4b483 });
     const beach = new THREE.Mesh(beachGeo, beachMat);
-    beach.position.y = -3.5;
+    beach.position.y = -5;
     terrain.add(beach);
 
-    for (let i = 0; i < 7; i++) {
-      const angle = (i / 7) * Math.PI * 2;
-      const r = island.scale * (8 + Math.random() * 5);
+    // More trees spread further from center
+    const treeCount = 12;
+    for (let i = 0; i < treeCount; i++) {
+      const angle = (i / treeCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const r = island.scale * (16 + Math.random() * 10);
       const treeGroup = new THREE.Group();
 
-      const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 4, 6);
+      // Larger trunks for bigger island scale
+      const trunkH = 5 + Math.random() * 3;
+      const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, trunkH, 6);
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-      trunk.position.y = 2;
+      trunk.position.y = trunkH / 2;
       treeGroup.add(trunk);
 
-      const leavesGeo = new THREE.ConeGeometry(2.5, 5, 6);
+      const leavesGeo = new THREE.ConeGeometry(3.5, 7, 6);
       const leavesMat = new THREE.MeshLambertMaterial({ color: 0x2d7a1c });
       const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-      leaves.position.y = 6;
+      leaves.position.y = trunkH + 3;
       treeGroup.add(leaves);
 
-      treeGroup.position.set(Math.cos(angle) * r, 2, Math.sin(angle) * r);
+      treeGroup.position.set(Math.cos(angle) * r, 4, Math.sin(angle) * r);
       treeGroup.rotation.y = Math.random() * Math.PI;
       terrain.add(treeGroup);
     }
@@ -562,16 +576,16 @@ export class GameEngine {
     // Terrain (procedural, may be replaced by GLB)
     group.add(this.buildProceduralIslandTerrain(island));
 
-    // Campfire always stays
+    // Campfire sits on top of the taller island (terrain top at ~y=4)
     const campfireGroup = this.createCampfire(island.scale);
     campfireGroup.name = "campfire";
-    campfireGroup.position.set(0, 2.5, 0);
+    campfireGroup.position.set(0, 4.5, 0);
     group.add(campfireGroup);
 
-    // Project portal icon always stays
+    // Project portal icon — higher above the bigger island terrain
     if (island.projectUrl || island.id) {
       const portalGroup = this.createPortalIcon(island);
-      portalGroup.position.set(0, 10, 0);
+      portalGroup.position.set(0, 16, 0);
       portalGroup.name = `portal_${island.id}`;
       group.add(portalGroup);
     }
@@ -895,6 +909,25 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Toggle between deck/crow's-nest mode (0) and hover/cinematic follow cam (1).
+   */
+  toggleCameraMode() {
+    this.cameraMode = this.cameraMode === 0 ? 1 : 0;
+    this.zoomTarget = 0;
+  }
+
+  getCameraMode() {
+    return this.cameraMode;
+  }
+
+  /**
+   * Adjust zoom level by delta (-1 to 1 range). Used by mobile +/- buttons.
+   */
+  adjustZoom(delta: number) {
+    this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget + delta));
+  }
+
   private updatePlayerShip(delta: number) {
     const gs = this.gameState;
     const input = this.inputState;
@@ -966,37 +999,61 @@ export class GameEngine {
     const fwdX = Math.sin(gs.playerRotation);
     const fwdZ = Math.cos(gs.playerRotation);
 
-    // Camera sits BEHIND ship center (negative = toward stern, away from bow)
-    // so the player sees the bow and sea ahead — not a view from the bow looking down.
-    //   z=0 deck view:  5 units behind center, ~5 units up  → sees bow in foreground
-    //   z=1 crow's nest: 9 units behind, ~20 units up → wide horizon view
-    const camFwd = -5 - 4 * z;
-    const camUp  =  5 + 15 * (z * z);
+    let camPos: THREE.Vector3;
+    let lookTarget: THREE.Vector3;
 
-    const camPos = this.playerShip.position.clone().add(new THREE.Vector3(
-      fwdX * camFwd, camUp, fwdZ * camFwd
-    ));
-    this.camera.position.lerp(camPos, 0.06);
+    if (this.cameraMode === 1) {
+      // ── Mode 1: Hover / Cinematic follow cam ───────────────────────────────
+      // Camera hovers above and behind the ship; zoom moves it further back
+      // (and slightly higher). The look direction is always level with the
+      // horizon so the view never tilts up or down.
+      //   z=0 (close):  20 units back, 12 units up
+      //   z=1 (far):    38 units back, 20 units up
+      const camDist   = 20 + 18 * z;
+      const camHeight = 12 + 8  * z;
+      camPos = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * -camDist, camHeight, fwdZ * -camDist
+      ));
+      this.camera.position.lerp(camPos, 0.05);
 
-    // Look target — when near island, aim at the island's portal icon height
-    // so both campfire and glowing portal are in frame; otherwise look to horizon.
-    let lookDist: number;
-    let lookY: number;
-    if (this._nearIsland && this._nearIslandPos) {
-      // Point camera toward island portal icon (y ≈ 10)
-      const toIsland = this._nearIslandPos.clone().sub(this.playerShip.position);
-      lookDist = Math.max(8, toIsland.length() * 0.85);
-      lookY = 9;
+      // Look straight ahead at the same height as the camera so the horizon
+      // stays perfectly level regardless of zoom level.
+      lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * 80, camHeight - 1, fwdZ * 80
+      ));
+      this.camera.lookAt(lookTarget);
+
     } else {
-      //   z=0: look 30 units ahead (bow silhouette + near ocean)
-      //   z=1: look 280 units ahead (full horizon)
-      lookDist = 30 + 250 * (z * z);
-      lookY = 3;
+      // ── Mode 0: Deck / Crow's-nest (default) ──────────────────────────────
+      // Camera sits BEHIND ship center so the player sees the bow and sea ahead.
+      //   z=0 deck:       5 units behind center, 5 units up
+      //   z=1 crow's nest: 9 units behind,      20 units up
+      const camFwd = -5 - 4 * z;
+      const camUp  =  5 + 15 * (z * z);
+      camPos = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * camFwd, camUp, fwdZ * camFwd
+      ));
+      this.camera.position.lerp(camPos, 0.06);
+
+      // Look target — when near island, aim at the portal icon height so both
+      // the campfire and project links are in frame; otherwise look to horizon.
+      let lookDist: number;
+      let lookY: number;
+      if (this._nearIsland && this._nearIslandPos) {
+        const toIsland = this._nearIslandPos.clone().sub(this.playerShip.position);
+        lookDist = Math.max(12, toIsland.length() * 0.9);
+        lookY = 14;
+      } else {
+        //   z=0: look 30 units ahead (bow + near ocean)
+        //   z=1: look 280 units ahead (full horizon)
+        lookDist = 30 + 250 * (z * z);
+        lookY = 3;
+      }
+      lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * lookDist, lookY, fwdZ * lookDist
+      ));
+      this.camera.lookAt(lookTarget);
     }
-    const lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
-      fwdX * lookDist, lookY, fwdZ * lookDist
-    ));
-    this.camera.lookAt(lookTarget);
 
     // Fire cannon
     if (input.fire && input.fireCooldown <= 0 && gs.playerCannonBalls > 0) {
@@ -1252,7 +1309,7 @@ export class GameEngine {
       const portal = group.getObjectByName(`portal_${state.id}`) as THREE.Group;
       if (portal) {
         portal.rotation.y = time * 0.7;
-        portal.position.y = 10 + Math.sin(time * 1.4) * 1.4;
+        portal.position.y = 16 + Math.sin(time * 1.4) * 1.8;
 
         // Pulse outer glow ring
         const outerRing = portal.getObjectByName("outerGlowRing") as THREE.Mesh | undefined;
@@ -1281,12 +1338,12 @@ export class GameEngine {
         }
       }
 
-      // Check proximity
+      // Check proximity — wider radius to match the bigger island footprint
       const dx = state.position.x - this.playerShip.position.x;
       const dz = state.position.z - this.playerShip.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < 35) {
-        // Auto-stop the auto-sail when we've arrived — prevents the 3-second drift past
+      if (dist < 60) {
+        // Auto-stop the auto-sail when we've arrived — prevents drift past the island
         if (this.inputState.sailToIsland) {
           this.inputState.sailToIsland = false;
           this.gameState.playerSpeed *= 0.15;
