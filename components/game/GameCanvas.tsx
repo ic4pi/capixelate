@@ -98,9 +98,27 @@ export default function GameCanvas() {
 
   const handlePortalClick = useCallback(() => {
     if (nearbyIsland?.projectUrl) {
+      // Stop the ship when visiting a portal so it doesn't drift on return
+      engineRef.current?.stopMovement();
       window.open(nearbyIsland.projectUrl, "_blank");
     }
   }, [nearbyIsland]);
+
+  const handleDock = useCallback(() => {
+    engineRef.current?.stopMovement();
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    engineRef.current?.adjustZoom(-0.2);
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    engineRef.current?.adjustZoom(0.2);
+  }, []);
+
+  const handleToggleCam = useCallback(() => {
+    engineRef.current?.toggleCameraMode();
+  }, []);
 
   // Called when user clicks Set Sail or Go Directly to Island
   const handleIntroStart = useCallback((sailDirectly: boolean) => {
@@ -251,11 +269,21 @@ export default function GameCanvas() {
         const { playerPosition } = engineRef.current.gameState;
         const dx = prev.position.x - playerPosition.x;
         const dz = prev.position.z - playerPosition.z;
-        return Math.sqrt(dx * dx + dz * dz) > 50 ? null : prev;
+        return Math.sqrt(dx * dx + dz * dz) > 80 ? null : prev;
       });
     }, 500);
     return () => clearInterval(interval);
   }, []);
+
+  // Activate island-proximity camera view when docked at an island
+  useEffect(() => {
+    if (!engineRef.current) return;
+    if (nearbyIsland) {
+      engineRef.current.setIslandProximityView(true, nearbyIsland.position);
+    } else {
+      engineRef.current.setIslandProximityView(false);
+    }
+  }, [nearbyIsland]);
 
   return (
     <div className="relative w-full h-full">
@@ -273,6 +301,10 @@ export default function GameCanvas() {
           nearbyIsland={nearbyIsland}
           onSailToIsland={handleSailToIsland}
           onPortalClick={handlePortalClick}
+          onDock={handleDock}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onToggleCam={handleToggleCam}
           activeProject={activeProject}
           onCloseProject={() => setActiveProject(null)}
           onTouchInput={handleTouchInput}

@@ -1,6 +1,16 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 
+// When deployed in split mode (Vercel frontend + Render backend), all data API
+// calls must go to Render where the persistent database and file uploads live.
+// Set NEXT_PUBLIC_API_BASE_URL on Vercel to point to the Render service URL.
+// NEXT_PUBLIC_* variables are inlined at build time — no runtime lookup needed.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+function apiUrl(path: string) {
+  return `${API_BASE}${path}`;
+}
+
 type TabId = "projects" | "islands" | "enemies" | "ships" | "map";
 
 interface Project {
@@ -130,10 +140,10 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const [pr, isl, en, sh] = await Promise.all([
-        fetch("/api/projects").then((r) => r.json()),
-        fetch("/api/islands").then((r) => r.json()),
-        fetch("/api/enemies").then((r) => r.json()),
-        fetch("/api/ships").then((r) => r.json()),
+        fetch(apiUrl("/api/projects")).then((r) => r.json()),
+        fetch(apiUrl("/api/islands")).then((r) => r.json()),
+        fetch(apiUrl("/api/enemies")).then((r) => r.json()),
+        fetch(apiUrl("/api/ships")).then((r) => r.json()),
       ]);
       setProjects(pr.projects ?? []);
       setIslands(isl.islands ?? []);
@@ -160,7 +170,7 @@ export default function AdminDashboard() {
   // Seed demo data
   const handleSeed = async () => {
     if (!confirm("This will replace all data with demo data. Continue?")) return;
-    const res = await fetch("/api/seed", { method: "POST" });
+    const res = await fetch(apiUrl("/api/seed"), { method: "POST" });
     const data = await res.json();
     if (data.success) {
       showToast("Demo data seeded!");
@@ -273,7 +283,9 @@ export default function AdminDashboard() {
   const saveProject = async () => {
     if (!editingProject) return;
     const method = editingProject.id ? "PUT" : "POST";
-    const url = editingProject.id ? `/api/projects/${editingProject.id}` : "/api/projects";
+    const url = editingProject.id
+      ? apiUrl(`/api/projects/${editingProject.id}`)
+      : apiUrl("/api/projects");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -284,13 +296,14 @@ export default function AdminDashboard() {
       setEditingProject(null);
       loadAll();
     } else {
-      showToast("Failed to save project", "error");
+      const err = await res.json().catch(() => ({}));
+      showToast(`Failed to save project: ${err.error ?? res.status}`, "error");
     }
   };
 
   const deleteProject = async (id: string) => {
     if (!confirm("Delete this project?")) return;
-    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/projects/${id}`), { method: "DELETE" });
     showToast("Project deleted");
     loadAll();
   };
@@ -301,7 +314,9 @@ export default function AdminDashboard() {
   const saveIsland = async () => {
     if (!editingIsland) return;
     const method = editingIsland.id ? "PUT" : "POST";
-    const url = editingIsland.id ? `/api/islands/${editingIsland.id}` : "/api/islands";
+    const url = editingIsland.id
+      ? apiUrl(`/api/islands/${editingIsland.id}`)
+      : apiUrl("/api/islands");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -312,13 +327,14 @@ export default function AdminDashboard() {
       setEditingIsland(null);
       loadAll();
     } else {
-      showToast("Failed to save island", "error");
+      const err = await res.json().catch(() => ({}));
+      showToast(`Failed to save island: ${err.error ?? res.status}`, "error");
     }
   };
 
   const deleteIsland = async (id: string) => {
     if (!confirm("Delete this island?")) return;
-    await fetch(`/api/islands/${id}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/islands/${id}`), { method: "DELETE" });
     showToast("Island deleted");
     loadAll();
   };
@@ -329,7 +345,9 @@ export default function AdminDashboard() {
   const saveEnemy = async () => {
     if (!editingEnemy) return;
     const method = editingEnemy.id ? "PUT" : "POST";
-    const url = editingEnemy.id ? `/api/enemies/${editingEnemy.id}` : "/api/enemies";
+    const url = editingEnemy.id
+      ? apiUrl(`/api/enemies/${editingEnemy.id}`)
+      : apiUrl("/api/enemies");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -340,13 +358,14 @@ export default function AdminDashboard() {
       setEditingEnemy(null);
       loadAll();
     } else {
-      showToast("Failed to save enemy", "error");
+      const err = await res.json().catch(() => ({}));
+      showToast(`Failed to save enemy: ${err.error ?? res.status}`, "error");
     }
   };
 
   const deleteEnemy = async (id: string) => {
     if (!confirm("Delete this enemy?")) return;
-    await fetch(`/api/enemies/${id}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/enemies/${id}`), { method: "DELETE" });
     showToast("Enemy deleted");
     loadAll();
   };
@@ -357,7 +376,9 @@ export default function AdminDashboard() {
   const saveShip = async () => {
     if (!editingShip) return;
     const method = editingShip.id ? "PUT" : "POST";
-    const url = editingShip.id ? `/api/ships/${editingShip.id}` : "/api/ships";
+    const url = editingShip.id
+      ? apiUrl(`/api/ships/${editingShip.id}`)
+      : apiUrl("/api/ships");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -368,7 +389,8 @@ export default function AdminDashboard() {
       setEditingShip(null);
       loadAll();
     } else {
-      showToast("Failed to save ship", "error");
+      const err = await res.json().catch(() => ({}));
+      showToast(`Failed to save ship: ${err.error ?? res.status}`, "error");
     }
   };
 
@@ -900,11 +922,15 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("category", category);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      // Upload directly to Render when API_BASE is set — avoids the Vercel proxy
+      // and ensures the file lands on Render's persistent disk alongside the DB.
+      const uploadUrl = apiUrl("/api/upload");
+      const res = await fetch(uploadUrl, { method: "POST", body: fd });
       const data = await res.json();
       if (data.url) onUpload(data.url);
-    } catch {
-      // ignore
+      else alert(`Upload failed: ${data.error ?? "unknown error"}`);
+    } catch (err) {
+      alert(`Upload error: ${err}`);
     } finally {
       setUploading(false);
     }

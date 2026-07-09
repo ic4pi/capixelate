@@ -7,6 +7,10 @@ interface GameHUDProps {
   nearbyIsland: IslandState | null;
   onSailToIsland: () => void;
   onPortalClick: () => void;
+  onDock: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onToggleCam: () => void;
   activeProject: { title: string; description: string; url: string } | null;
   onCloseProject: () => void;
   onTouchInput: (key: "forward" | "backward" | "left" | "right" | "fire", pressed: boolean) => void;
@@ -17,6 +21,10 @@ export default function GameHUD({
   nearbyIsland,
   onSailToIsland,
   onPortalClick,
+  onDock,
+  onZoomIn,
+  onZoomOut,
+  onToggleCam,
   activeProject,
   onCloseProject,
   onTouchInput,
@@ -312,6 +320,18 @@ export default function GameHUD({
                 </kbd>
                 <span>Fire Cannons</span>
               </div>
+              <div className="flex items-center gap-2">
+                <kbd className="bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-[10px] text-white">
+                  Scroll
+                </kbd>
+                <span>Zoom</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <kbd className="bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-[10px] text-white">
+                  C
+                </kbd>
+                <span>Camera Mode</span>
+              </div>
             </div>
           )}
         </div>
@@ -332,7 +352,15 @@ export default function GameHUD({
 
       {/* ===== MOBILE TOUCH CONTROLS ===== */}
       {isMobile && (
-        <MobileTouchControls onTouchInput={onTouchInput} onSailToIsland={onSailToIsland} />
+        <MobileTouchControls
+          onTouchInput={onTouchInput}
+          onSailToIsland={onSailToIsland}
+          onDock={onDock}
+          onZoomIn={onZoomIn}
+          onZoomOut={onZoomOut}
+          onToggleCam={onToggleCam}
+          nearIsland={!!nearbyIsland}
+        />
       )}
 
       {/* ===== NEARBY ISLAND — DOCKED VIEW ===== */}
@@ -509,9 +537,24 @@ type TouchKey = "forward" | "backward" | "left" | "right" | "fire";
 interface MobileTouchControlsProps {
   onTouchInput: (key: TouchKey, pressed: boolean) => void;
   onSailToIsland: () => void;
+  onDock: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onToggleCam: () => void;
+  nearIsland: boolean;
 }
 
-function MobileTouchControls({ onTouchInput, onSailToIsland }: MobileTouchControlsProps) {
+function MobileTouchControls({
+  onTouchInput,
+  onSailToIsland,
+  onDock,
+  onZoomIn,
+  onZoomOut,
+  onToggleCam,
+  nearIsland,
+}: MobileTouchControlsProps) {
+  const [camMode, setCamMode] = useState(0);
+
   const btnStyle = (color = "#f59e0b"): React.CSSProperties => ({
     background: "rgba(0,0,0,0.65)",
     border: `1.5px solid ${color}55`,
@@ -536,6 +579,11 @@ function MobileTouchControls({ onTouchInput, onSailToIsland }: MobileTouchContro
     onPointerCancel: () => onTouchInput(key, false),
     onPointerLeave: () => onTouchInput(key, false),
   });
+
+  const handleToggleCam = () => {
+    onToggleCam();
+    setCamMode((m) => (m === 0 ? 1 : 0));
+  };
 
   return (
     <div className="absolute bottom-4 left-0 right-0 z-10 flex items-end justify-between px-4">
@@ -571,20 +619,70 @@ function MobileTouchControls({ onTouchInput, onSailToIsland }: MobileTouchContro
         </div>
       </div>
 
-      {/* Right side: sail button + fire cannon */}
-      <div className="flex flex-col items-center gap-2">
-        <button
-          onClick={onSailToIsland}
-          className="text-[10px] font-bold tracking-wide px-3 py-2 rounded-lg"
-          style={{
-            background: "rgba(0,0,0,0.65)",
-            border: "1.5px solid #f59e0b55",
-            color: "#f59e0b",
-            boxShadow: "0 0 10px #f59e0b22",
-          }}
-        >
-          ⚓ TO ISLAND
-        </button>
+      {/* Right side: camera controls + sail/dock + fire */}
+      <div className="flex flex-col items-end gap-1.5">
+        {/* Zoom + Camera mode row */}
+        <div className="flex items-center gap-1.5">
+          {/* Camera mode toggle */}
+          <button
+            onClick={handleToggleCam}
+            className="text-[10px] font-bold tracking-wide px-2 py-1.5 rounded-lg"
+            style={{
+              background: "rgba(0,0,0,0.65)",
+              border: `1.5px solid ${camMode === 1 ? "#a78bfa" : "#64748b"}88`,
+              color: camMode === 1 ? "#a78bfa" : "#94a3b8",
+              boxShadow: camMode === 1 ? "0 0 10px #a78bfa33" : "none",
+              minWidth: 52,
+            }}
+          >
+            {camMode === 0 ? "🎯 DECK" : "🎥 HOVER"}
+          </button>
+          {/* Zoom out */}
+          <button
+            onClick={onZoomOut}
+            style={{ ...btnStyle("#64748b"), width: 40, height: 40, fontSize: "20px", touchAction: "manipulation" }}
+          >
+            −
+          </button>
+          {/* Zoom in */}
+          <button
+            onClick={onZoomIn}
+            style={{ ...btnStyle("#64748b"), width: 40, height: 40, fontSize: "20px", touchAction: "manipulation" }}
+          >
+            +
+          </button>
+        </div>
+
+        {/* Sail / Dock button */}
+        {nearIsland ? (
+          <button
+            onClick={onDock}
+            className="text-[11px] font-bold tracking-wide px-3 py-2 rounded-lg"
+            style={{
+              background: "rgba(0,20,10,0.85)",
+              border: "1.5px solid #00ffcc88",
+              color: "#00ffcc",
+              boxShadow: "0 0 14px #00ffcc44",
+            }}
+          >
+            ⚓ DOCK
+          </button>
+        ) : (
+          <button
+            onClick={onSailToIsland}
+            className="text-[10px] font-bold tracking-wide px-3 py-2 rounded-lg"
+            style={{
+              background: "rgba(0,0,0,0.65)",
+              border: "1.5px solid #f59e0b55",
+              color: "#f59e0b",
+              boxShadow: "0 0 10px #f59e0b22",
+            }}
+          >
+            ⚓ TO ISLAND
+          </button>
+        )}
+
+        {/* Fire button */}
         <div
           style={{ ...btnStyle("#ef4444"), width: 72, height: 72, borderRadius: "50%", fontSize: "24px" }}
           {...makeHandlers("fire")}

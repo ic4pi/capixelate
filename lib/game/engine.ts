@@ -50,6 +50,14 @@ export class GameEngine {
   private zoomLevel = 0;
   private _onWheel?: (e: WheelEvent) => void;
 
+  // Island proximity view state
+  private _nearIsland = false;
+  private _nearIslandPos: THREE.Vector3 | null = null;
+
+  // 0 = deck/crow's-nest (scroll changes height)
+  // 1 = hover/cinematic follow cam (scroll changes distance back, always level)
+  private cameraMode = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -91,57 +99,57 @@ export class GameEngine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.5;
+    this.renderer.toneMappingExposure = 0.82;
     this.clock = new THREE.Clock();
   }
 
-  // Moon world position — shared between initSky, initLights, initWater, and animate
-  private moonWorldPos = new THREE.Vector3(-200, 200, -600);
+  // Moon world position — closer, higher, more prominent harvest moon
+  private moonWorldPos = new THREE.Vector3(-120, 220, -450);
 
   private initScene() {
     this.scene = new THREE.Scene();
-    // Reduced fog density so islands at ~200 units are clearly visible
-    this.scene.fog = new THREE.FogExp2(0x051520, 0.0012);
+    // Low fog density — islands visible from 200+ units, harvest moon glows through
+    this.scene.fog = new THREE.FogExp2(0x060e1a, 0.0008);
   }
 
   private initCamera() {
     this.camera = new THREE.PerspectiveCamera(
-      65,
+      70,
       this.canvas.clientWidth / this.canvas.clientHeight,
       0.1,
       2000
     );
-    // Deck view: on ship, looking forward (ship faces -Z at start, rot=π)
-    this.camera.position.set(0, 7, -2);
-    this.camera.lookAt(0, 2, -60);
+    // Deck view: mid-ship, above deck, looking toward the bow and sea ahead
+    this.camera.position.set(0, 5, 5);
+    this.camera.lookAt(0, 4, -30);
   }
 
   private initLights() {
-    // Brighter ambient for a full-moon night feel
-    const ambientLight = new THREE.AmbientLight(0x2a3a5a, 1.0);
+    // Bright ambient for harvest-moon night — warm orange-tinted sky
+    const ambientLight = new THREE.AmbientLight(0x3a4060, 1.8);
     this.scene.add(ambientLight);
 
-    // Main moonlight — bright, cool-white directional light
-    this.moonLight = new THREE.DirectionalLight(0xb0ccee, 2.8);
+    // Main moonlight — strong, warm harvest-moon directional light
+    this.moonLight = new THREE.DirectionalLight(0xffd4a0, 5.0);
     this.moonLight.position.copy(this.moonWorldPos);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.camera.near = 0.5;
     this.moonLight.shadow.camera.far = 1500;
-    this.moonLight.shadow.camera.left = -300;
-    this.moonLight.shadow.camera.right = 300;
-    this.moonLight.shadow.camera.top = 300;
-    this.moonLight.shadow.camera.bottom = -300;
+    this.moonLight.shadow.camera.left = -400;
+    this.moonLight.shadow.camera.right = 400;
+    this.moonLight.shadow.camera.top = 400;
+    this.moonLight.shadow.camera.bottom = -400;
     this.moonLight.shadow.mapSize.width = 2048;
     this.moonLight.shadow.mapSize.height = 2048;
     this.scene.add(this.moonLight);
 
-    // Warm fill light from opposite side — simulates sky glow
-    const fillLight = new THREE.PointLight(0x4466aa, 0.9, 800);
-    fillLight.position.set(200, 60, 200);
+    // Warm fill light from opposite horizon
+    const fillLight = new THREE.PointLight(0x5566aa, 1.2, 1000);
+    fillLight.position.set(200, 80, 200);
     this.scene.add(fillLight);
 
-    // Soft secondary fill to lift shadows
-    const skyFill = new THREE.HemisphereLight(0x2244aa, 0x0a1a2a, 0.5);
+    // Hemisphere: warm sky above, deep ocean below — lifts all shadows
+    const skyFill = new THREE.HemisphereLight(0x3355bb, 0x0a1a2a, 0.9);
     this.scene.add(skyFill);
   }
 
@@ -161,18 +169,18 @@ export class GameEngine {
     this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
     this.scene.add(this.skyMesh);
 
-    // Full moon — large, bright sphere
-    const moonGeo = new THREE.SphereGeometry(22, 32, 32);
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xf8f0d8 });
+    // Large full harvest moon — warm orange/golden sphere
+    const moonGeo = new THREE.SphereGeometry(38, 32, 32);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xff9944 });
     const moon = new THREE.Mesh(moonGeo, moonMat);
     moon.position.copy(this.moonWorldPos);
     this.scene.add(moon);
 
-    // Halo ring 1 — inner soft glow
+    // Halo ring 1 — inner warm orange glow
     const halo1Mat = new THREE.ShaderMaterial({
       uniforms: {
-        uGlowColor: { value: new THREE.Color(0xd0e4ff) },
-        uIntensity: { value: 0.9 },
+        uGlowColor: { value: new THREE.Color(0xff8833) },
+        uIntensity: { value: 1.0 },
         uTime: { value: 0 },
       },
       vertexShader: glowVertexShader,
@@ -182,15 +190,15 @@ export class GameEngine {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const halo1 = new THREE.Mesh(new THREE.SphereGeometry(30, 20, 20), halo1Mat);
+    const halo1 = new THREE.Mesh(new THREE.SphereGeometry(52, 20, 20), halo1Mat);
     halo1.position.copy(this.moonWorldPos);
     this.scene.add(halo1);
 
-    // Halo ring 2 — wider atmospheric corona
+    // Halo ring 2 — wider amber atmospheric corona
     const halo2Mat = new THREE.ShaderMaterial({
       uniforms: {
-        uGlowColor: { value: new THREE.Color(0x8aaae0) },
-        uIntensity: { value: 0.5 },
+        uGlowColor: { value: new THREE.Color(0xcc6622) },
+        uIntensity: { value: 0.55 },
         uTime: { value: 0 },
       },
       vertexShader: glowVertexShader,
@@ -200,15 +208,15 @@ export class GameEngine {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const halo2 = new THREE.Mesh(new THREE.SphereGeometry(48, 20, 20), halo2Mat);
+    const halo2 = new THREE.Mesh(new THREE.SphereGeometry(78, 20, 20), halo2Mat);
     halo2.position.copy(this.moonWorldPos);
     this.scene.add(halo2);
 
-    // Halo ring 3 — outermost faint atmospheric scatter
+    // Halo ring 3 — outermost faint warm scatter
     const halo3Mat = new THREE.ShaderMaterial({
       uniforms: {
-        uGlowColor: { value: new THREE.Color(0x4466aa) },
-        uIntensity: { value: 0.25 },
+        uGlowColor: { value: new THREE.Color(0x994422) },
+        uIntensity: { value: 0.28 },
         uTime: { value: 0 },
       },
       vertexShader: glowVertexShader,
@@ -218,7 +226,7 @@ export class GameEngine {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const halo3 = new THREE.Mesh(new THREE.SphereGeometry(70, 20, 20), halo3Mat);
+    const halo3 = new THREE.Mesh(new THREE.SphereGeometry(110, 20, 20), halo3Mat);
     halo3.position.copy(this.moonWorldPos);
     this.scene.add(halo3);
   }
@@ -381,9 +389,9 @@ export class GameEngine {
     this.playerShip.rotation.y = Math.PI; // face toward islands at start
     this.scene.add(this.playerShip);
 
-    // Initial camera: on ship deck, looking forward toward islands
-    this.camera.position.set(0, 7, -2);
-    this.camera.lookAt(0, 2, -60);
+    // Initial camera: mid-ship deck, looking forward over the bow toward islands
+    this.camera.position.set(0, 5, 5);
+    this.camera.lookAt(0, 4, -30);
 
     if (modelUrl) {
       this.loadGLB(modelUrl)
@@ -455,6 +463,9 @@ export class GameEngine {
           this.inputState.fire = true;
           e.preventDefault();
           break;
+        case "KeyC":
+          this.toggleCameraMode();
+          break;
       }
     };
     const keyUp = (e: KeyboardEvent) => {
@@ -502,11 +513,13 @@ export class GameEngine {
     const terrain = new THREE.Group();
     terrain.name = "terrain";
 
+    // Island body — significantly larger so there's room to explore and
+    // the campfire / portal icons feel appropriately monumental
     const islandGeo = new THREE.CylinderGeometry(
-      island.scale * 18,
-      island.scale * 22,
-      island.scale * 6,
-      12,
+      island.scale * 30,   // top radius  (was 18)
+      island.scale * 38,   // bottom radius (was 22)
+      island.scale * 10,   // height (was 6)
+      16,
       3
     );
     const islandMat = new THREE.MeshLambertMaterial({ color: 0x3d6b1a });
@@ -516,35 +529,40 @@ export class GameEngine {
     islandMesh.receiveShadow = true;
     terrain.add(islandMesh);
 
+    // Wide sandy beach ring
     const beachGeo = new THREE.CylinderGeometry(
-      island.scale * 22,
-      island.scale * 24,
-      island.scale * 1.5,
-      12
+      island.scale * 38,   // top radius (was 22)
+      island.scale * 44,   // bottom radius (was 24)
+      island.scale * 2,    // height (was 1.5)
+      16
     );
     const beachMat = new THREE.MeshLambertMaterial({ color: 0xd4b483 });
     const beach = new THREE.Mesh(beachGeo, beachMat);
-    beach.position.y = -3.5;
+    beach.position.y = -5;
     terrain.add(beach);
 
-    for (let i = 0; i < 7; i++) {
-      const angle = (i / 7) * Math.PI * 2;
-      const r = island.scale * (8 + Math.random() * 5);
+    // More trees spread further from center
+    const treeCount = 12;
+    for (let i = 0; i < treeCount; i++) {
+      const angle = (i / treeCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const r = island.scale * (16 + Math.random() * 10);
       const treeGroup = new THREE.Group();
 
-      const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 4, 6);
+      // Larger trunks for bigger island scale
+      const trunkH = 5 + Math.random() * 3;
+      const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, trunkH, 6);
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-      trunk.position.y = 2;
+      trunk.position.y = trunkH / 2;
       treeGroup.add(trunk);
 
-      const leavesGeo = new THREE.ConeGeometry(2.5, 5, 6);
+      const leavesGeo = new THREE.ConeGeometry(3.5, 7, 6);
       const leavesMat = new THREE.MeshLambertMaterial({ color: 0x2d7a1c });
       const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-      leaves.position.y = 6;
+      leaves.position.y = trunkH + 3;
       treeGroup.add(leaves);
 
-      treeGroup.position.set(Math.cos(angle) * r, 2, Math.sin(angle) * r);
+      treeGroup.position.set(Math.cos(angle) * r, 4, Math.sin(angle) * r);
       treeGroup.rotation.y = Math.random() * Math.PI;
       terrain.add(treeGroup);
     }
@@ -558,19 +576,24 @@ export class GameEngine {
     // Terrain (procedural, may be replaced by GLB)
     group.add(this.buildProceduralIslandTerrain(island));
 
-    // Campfire always stays
+    // Campfire sits on top of the taller island (terrain top at ~y=4)
     const campfireGroup = this.createCampfire(island.scale);
     campfireGroup.name = "campfire";
-    campfireGroup.position.set(0, 2.5, 0);
+    campfireGroup.position.set(0, 4.5, 0);
     group.add(campfireGroup);
 
-    // Project portal icon always stays
+    // Project portal icon — higher above the bigger island terrain
     if (island.projectUrl || island.id) {
       const portalGroup = this.createPortalIcon(island);
-      portalGroup.position.set(0, 10, 0);
+      portalGroup.position.set(0, 16, 0);
       portalGroup.name = `portal_${island.id}`;
       group.add(portalGroup);
     }
+
+    // Extra fill light positioned above the island to ensure it's always visible
+    const islandFill = new THREE.PointLight(0xffc080, 2.0, 120);
+    islandFill.position.set(0, 25, 0);
+    group.add(islandFill);
 
     group.position.set(island.position.x, 0, island.position.z);
     this.scene.add(group);
@@ -636,8 +659,8 @@ export class GameEngine {
     firePoints.name = "fireParticles";
     group.add(firePoints);
 
-    // Fire light
-    const fireLight = new THREE.PointLight(0xff6600, 3, 35);
+    // Fire light — bright, wide range to illuminate the whole island
+    const fireLight = new THREE.PointLight(0xff6600, 6, 70);
     fireLight.position.y = 2;
     fireLight.name = "fireLight";
     group.add(fireLight);
@@ -854,12 +877,55 @@ export class GameEngine {
       const dz = target.position.z - this.playerShip.position.z;
       this.gameState.playerRotation = Math.atan2(dx, dz);
       this.playerShip.rotation.y = this.gameState.playerRotation;
-      // Tween-like movement
       this.inputState.sailToIsland = true;
+      // Safety fallback — proximity check will stop sailToIsland sooner
       setTimeout(() => {
         this.inputState.sailToIsland = false;
-      }, 5000);
+      }, 8000);
     }
+  }
+
+  /** Stop all ship movement immediately (used by dock button / portal click). */
+  stopMovement() {
+    this.inputState.sailToIsland = false;
+    this.inputState.forward = false;
+    this.inputState.backward = false;
+    this.gameState.playerSpeed = 0;
+  }
+
+  /**
+   * Switch the camera to an island-view mode that aims at the portal icon so
+   * both the campfire and the project links are in frame.
+   */
+  setIslandProximityView(near: boolean, pos?: { x: number; z: number }) {
+    this._nearIsland = near;
+    if (near && pos) {
+      this._nearIslandPos = new THREE.Vector3(pos.x, 0, pos.z);
+      // Gently zoom out so the whole island scene is visible
+      this.zoomTarget = Math.max(this.zoomTarget, 0.38);
+    } else {
+      this._nearIslandPos = null;
+      this.zoomTarget = 0;
+    }
+  }
+
+  /**
+   * Toggle between deck/crow's-nest mode (0) and hover/cinematic follow cam (1).
+   */
+  toggleCameraMode() {
+    this.cameraMode = this.cameraMode === 0 ? 1 : 0;
+    this.zoomTarget = 0;
+  }
+
+  getCameraMode() {
+    return this.cameraMode;
+  }
+
+  /**
+   * Adjust zoom level by delta (-1 to 1 range). Used by mobile +/- buttons.
+   */
+  adjustZoom(delta: number) {
+    this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget + delta));
   }
 
   private updatePlayerShip(delta: number) {
@@ -933,29 +999,61 @@ export class GameEngine {
     const fwdX = Math.sin(gs.playerRotation);
     const fwdZ = Math.cos(gs.playerRotation);
 
-    // Camera lives ON the ship at all times.
-    // z=0 deck: at ship's mid-mast area, deck height — looking forward over the bow
-    // z=1 crow's nest: risen to mast top, trivially further back — still looking forward
-    //
-    //  camFwd:  how far ahead of ship center the camera sits (positive = bow side)
-    //  camUp:   height above waterline
-    const camFwd =  2 - 5 * z;          //  2 (mid-deck) → -3 (near stern at mast top)
-    const camUp  =  7 + 16 * (z * z);   //  7 (deck rail) → 23 (mast top), quadratic climb
+    let camPos: THREE.Vector3;
+    let lookTarget: THREE.Vector3;
 
-    const camPos = this.playerShip.position.clone().add(new THREE.Vector3(
-      fwdX * camFwd, camUp, fwdZ * camFwd
-    ));
-    this.camera.position.lerp(camPos, 0.06);
+    if (this.cameraMode === 1) {
+      // ── Mode 1: Hover / Cinematic follow cam ───────────────────────────────
+      // Camera hovers above and behind the ship; zoom moves it further back
+      // (and slightly higher). The look direction is always level with the
+      // horizon so the view never tilts up or down.
+      //   z=0 (close):  20 units back, 12 units up
+      //   z=1 (far):    38 units back, 20 units up
+      const camDist   = 20 + 18 * z;
+      const camHeight = 12 + 8  * z;
+      camPos = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * -camDist, camHeight, fwdZ * -camDist
+      ));
+      this.camera.position.lerp(camPos, 0.05);
 
-    // Look target: always straight ahead toward the horizon.
-    // As the camera rises it looks further away → you see MORE, not less.
-    //   z=0: look 60 units ahead (deck + near ocean in frame)
-    //   z=1: look 350 units ahead (full horizon, islands visible)
-    const lookDist = 60 + 290 * (z * z);   // quadratic so horizon "reveals" smoothly
-    const lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
-      fwdX * lookDist, 2, fwdZ * lookDist
-    ));
-    this.camera.lookAt(lookTarget);
+      // Look straight ahead at the same height as the camera so the horizon
+      // stays perfectly level regardless of zoom level.
+      lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * 80, camHeight - 1, fwdZ * 80
+      ));
+      this.camera.lookAt(lookTarget);
+
+    } else {
+      // ── Mode 0: Deck / Crow's-nest (default) ──────────────────────────────
+      // Camera sits BEHIND ship center so the player sees the bow and sea ahead.
+      //   z=0 deck:       5 units behind center, 5 units up
+      //   z=1 crow's nest: 9 units behind,      20 units up
+      const camFwd = -5 - 4 * z;
+      const camUp  =  5 + 15 * (z * z);
+      camPos = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * camFwd, camUp, fwdZ * camFwd
+      ));
+      this.camera.position.lerp(camPos, 0.06);
+
+      // Look target — when near island, aim at the portal icon height so both
+      // the campfire and project links are in frame; otherwise look to horizon.
+      let lookDist: number;
+      let lookY: number;
+      if (this._nearIsland && this._nearIslandPos) {
+        const toIsland = this._nearIslandPos.clone().sub(this.playerShip.position);
+        lookDist = Math.max(12, toIsland.length() * 0.9);
+        lookY = 14;
+      } else {
+        //   z=0: look 30 units ahead (bow + near ocean)
+        //   z=1: look 280 units ahead (full horizon)
+        lookDist = 30 + 250 * (z * z);
+        lookY = 3;
+      }
+      lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
+        fwdX * lookDist, lookY, fwdZ * lookDist
+      ));
+      this.camera.lookAt(lookTarget);
+    }
 
     // Fire cannon
     if (input.fire && input.fireCooldown <= 0 && gs.playerCannonBalls > 0) {
@@ -1194,7 +1292,7 @@ export class GameEngine {
       if (campfireGroup) {
         const fireLight = campfireGroup.getObjectByName("fireLight") as THREE.PointLight;
         if (fireLight) {
-          fireLight.intensity = 3 + Math.sin(time * 8 + state.position.x) * 1 + Math.sin(time * 13) * 0.5;
+          fireLight.intensity = 6 + Math.sin(time * 8 + state.position.x) * 2 + Math.sin(time * 13) * 1;
         }
         const fireParticles = campfireGroup.getObjectByName("fireParticles") as THREE.Points;
         if (fireParticles && fireParticles.geometry.attributes.position) {
@@ -1211,7 +1309,7 @@ export class GameEngine {
       const portal = group.getObjectByName(`portal_${state.id}`) as THREE.Group;
       if (portal) {
         portal.rotation.y = time * 0.7;
-        portal.position.y = 10 + Math.sin(time * 1.4) * 1.4;
+        portal.position.y = 16 + Math.sin(time * 1.4) * 1.8;
 
         // Pulse outer glow ring
         const outerRing = portal.getObjectByName("outerGlowRing") as THREE.Mesh | undefined;
@@ -1240,12 +1338,19 @@ export class GameEngine {
         }
       }
 
-      // Check proximity
+      // Check proximity — wider radius to match the bigger island footprint
       const dx = state.position.x - this.playerShip.position.x;
       const dz = state.position.z - this.playerShip.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < 35 && this.onIslandProximity) {
-        this.onIslandProximity(state);
+      if (dist < 60) {
+        // Auto-stop the auto-sail when we've arrived — prevents drift past the island
+        if (this.inputState.sailToIsland) {
+          this.inputState.sailToIsland = false;
+          this.gameState.playerSpeed *= 0.15;
+        }
+        if (this.onIslandProximity) {
+          this.onIslandProximity(state);
+        }
       }
     });
   }
@@ -1298,6 +1403,8 @@ export class GameEngine {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     this.camera.aspect = w / h;
+    // Slightly wider FOV on portrait mobile so more scene is visible
+    this.camera.fov = w < h ? 80 : 70;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
   }
