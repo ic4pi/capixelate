@@ -910,25 +910,63 @@ const selectCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 p
 async function gzipFile(file: File): Promise<File> {
   const stream = file.stream().pipeThrough(new CompressionStream("gzip"));
   const blob = await new Response(stream).blob();
-  // Keep the original filename; server strips .gz before saving
   return new File([blob], file.name + ".gz", { type: "application/gzip" });
 }
 
-/** POST formData to a URL and return parsed JSON, or throw a readable error. */
-async function postUpload(url: string, fd: FormData): Promise<{ url: string }> {
-  const res = await fetch(url, { method: "POST", body: fd });
-  const ct = res.headers.get("content-type") ?? "";
-  if (!ct.includes("application/json")) {
-    if (res.status === 413) throw new Error("File too large (>4.5 MB) for this upload path.");
-    throw new Error(`HTTP ${res.status} — server returned non-JSON. Check Render logs.`);
-  }
-  const data = await res.json();
-  if (!data.url) throw new Error(data.error ?? "No URL in response");
-  return data;
-}
+// Each chunk stays well under Vercel's 4.5 MB serverless body limit.
+// Everything goes through /api/upload (same-origin Vercel proxy → Render).
+// No direct browser→Render calls needed — CORS, sleeping, and size limits
+// are all bypassed.
+const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB per chunk
 
-// 4 MB — safe headroom under Vercel's 4.5 MB serverless limit
-const PROXY_LIMIT = 4 * 1024 * 1024;
+/**
+ * Upload a file in chunks through the Vercel proxy.
+ * Small files (< CHUNK_SIZE) are sent as a single request.
+ */
+async function uploadFile(
+  file: File,
+  category: string,
+  onProgress: (msg: string) => void
+): Promise<{ url: string }> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId    = totalChunks > 1 ? crypto.randomUUID() : null;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start  = i * CHUNK_SIZE;
+    const chunk  = file.slice(start, start + CHUNK_SIZE);
+
+    if (totalChunks > 1) {
+      onProgress(`Uploading part ${i + 1} / ${totalChunks}…`);
+    }
+
+    const fd = new FormData();
+    fd.append("file", new File([chunk], file.name, { type: file.type }));
+    fd.append("category", category);
+    fd.append("originalName", file.name);
+    if (uploadId) {
+      fd.append("uploadId",    uploadId);
+      fd.append("chunkIndex",  String(i));
+      fd.append("totalChunks", String(totalChunks));
+    }
+
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const ct  = res.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new Error(`HTTP ${res.status} — server returned non-JSON. Check Render logs.`);
+    }
+    const data = await res.json();
+
+    if (i === totalChunks - 1) {
+      // Final chunk — server returns the finished file URL
+      if (!data.url) throw new Error(data.error ?? "No URL in response");
+      return data as { url: string };
+    }
+    // Intermediate chunk — just keep going
+    if (data.error) throw new Error(data.error);
+  }
+
+  throw new Error("Upload loop ended without a URL");
+}
 
 function FileUploadField({ label, category, currentUrl, onUpload }: {
   label: string;
@@ -946,43 +984,23 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
     setStatus("");
 
     try {
-      let uploadFile = file;
+      let fileToUpload = file;
       const isGlb = /\.(glb|gltf)$/i.test(file.name);
 
-      // --- Step 1: compress GLB/GLTF in-browser ---
+      // Compress GLB/GLTF in the browser first (reduces chunk count)
       if (isGlb && file.size > 512 * 1024) {
         setStatus(`Compressing… (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
-        uploadFile = await gzipFile(file);
-        const savings = Math.round((1 - uploadFile.size / file.size) * 100);
-        setStatus(`Compressed ${savings}% · uploading…`);
+        fileToUpload = await gzipFile(file);
+        const savings = Math.round((1 - fileToUpload.size / file.size) * 100);
+        setStatus(`Compressed ${savings}% (${(fileToUpload.size / 1024 / 1024).toFixed(1)} MB) — uploading…`);
       } else {
         setStatus("Uploading…");
       }
 
-      // --- Step 2: choose upload path ---
-      const fd = new FormData();
-      fd.append("file", uploadFile);
-      fd.append("category", category);
-
-      let data: { url: string };
-
-      if (uploadFile.size <= PROXY_LIMIT) {
-        // Small enough for the Vercel proxy
-        data = await postUpload("/api/upload", fd);
-      } else {
-        // Too large for Vercel — go directly to Render
-        if (!API_BASE) {
-          throw new Error(
-            "File is still large after compression and NEXT_PUBLIC_API_BASE_URL is not set. " +
-            "Set that variable on Vercel to enable direct-to-Render uploads."
-          );
-        }
-        setStatus(`Large file — uploading directly to Render… (may take ~30 s if service is sleeping)`);
-        data = await postUpload(`${API_BASE}/api/upload`, fd);
-      }
-
+      // Chunked upload — all through the same-origin Vercel proxy, no size limit
+      const data = await uploadFile(fileToUpload, category, setStatus);
       onUpload(data.url);
-      setStatus("✓ Uploaded");
+      setStatus("✓ Uploaded successfully");
     } catch (err) {
       alert(`Upload error: ${err}`);
       setStatus("");
