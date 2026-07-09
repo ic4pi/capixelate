@@ -87,11 +87,11 @@ export default function IntroScreen({ engineReady, onStart }: IntroScreenProps) 
             height: "100%",
             width: `${progress}%`,
             borderRadius: "3px",
-            background: progress === 100 ? "#22c55e" : "#f59e0b",
+            background: "#f59e0b",
             boxShadow: progress === 100
-              ? "0 0 14px #22c55e, 0 0 28px #22c55eaa"
+              ? "0 0 18px #f59e0b, 0 0 40px #f59e0bcc, 0 0 80px #f59e0b66"
               : "0 0 14px #f59e0b, 0 0 30px #f59e0baa, 0 0 60px #f59e0b55",
-            transition: "width 0.6s ease, background 0.4s, box-shadow 0.4s",
+            transition: "width 0.6s ease, box-shadow 0.4s",
           }}
         />
       </div>
