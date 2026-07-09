@@ -913,15 +913,40 @@ async function gzipFile(file: File): Promise<File> {
   return new File([blob], file.name + ".gz", { type: "application/gzip" });
 }
 
-// Each chunk stays well under Vercel's 4.5 MB serverless body limit.
-// Everything goes through /api/upload (same-origin Vercel proxy → Render).
-// No direct browser→Render calls needed — CORS, sleeping, and size limits
-// are all bypassed.
-const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB per chunk
+const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB — safely under Vercel's 4.5 MB limit
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * POST one FormData payload to /api/upload with automatic retries.
+ * Render's free tier can take 30-50 s to wake from sleep; each Vercel
+ * function proxy attempt may time out.  Retrying after a short wait
+ * catches the service once it's running again.
+ */
+async function postChunk(fd: FormData, attempt = 0): Promise<Response> {
+  const MAX_RETRIES = 4;
+  const RETRY_DELAY = [8000, 12000, 15000, 20000]; // ms
+
+  try {
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    // Treat 404/503 from sleeping Render as retryable
+    if ((res.status === 404 || res.status === 503) && attempt < MAX_RETRIES) {
+      await sleep(RETRY_DELAY[attempt]);
+      return postChunk(fd, attempt + 1);
+    }
+    return res;
+  } catch {
+    if (attempt < MAX_RETRIES) {
+      await sleep(RETRY_DELAY[attempt]);
+      return postChunk(fd, attempt + 1);
+    }
+    throw new Error("Upload failed after several retries. Check that your Render service is running.");
+  }
+}
 
 /**
  * Upload a file in chunks through the Vercel proxy.
- * Small files (< CHUNK_SIZE) are sent as a single request.
+ * Handles any file size; retries automatically if Render is sleeping.
  */
 async function uploadFile(
   file: File,
@@ -932,12 +957,14 @@ async function uploadFile(
   const uploadId    = totalChunks > 1 ? crypto.randomUUID() : null;
 
   for (let i = 0; i < totalChunks; i++) {
-    const start  = i * CHUNK_SIZE;
-    const chunk  = file.slice(start, start + CHUNK_SIZE);
+    const start = i * CHUNK_SIZE;
+    const chunk = file.slice(start, start + CHUNK_SIZE);
 
-    if (totalChunks > 1) {
-      onProgress(`Uploading part ${i + 1} / ${totalChunks}…`);
-    }
+    onProgress(
+      totalChunks > 1
+        ? `Uploading part ${i + 1} / ${totalChunks}… (if slow, Render is waking up)`
+        : "Uploading…"
+    );
 
     const fd = new FormData();
     fd.append("file", new File([chunk], file.name, { type: file.type }));
@@ -949,19 +976,17 @@ async function uploadFile(
       fd.append("totalChunks", String(totalChunks));
     }
 
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
-    const ct  = res.headers.get("content-type") ?? "";
+    const res  = await postChunk(fd);
+    const ct   = res.headers.get("content-type") ?? "";
     if (!ct.includes("application/json")) {
-      throw new Error(`HTTP ${res.status} — server returned non-JSON. Check Render logs.`);
+      throw new Error(`HTTP ${res.status} — server returned non-JSON. Render may still be starting.`);
     }
     const data = await res.json();
 
     if (i === totalChunks - 1) {
-      // Final chunk — server returns the finished file URL
       if (!data.url) throw new Error(data.error ?? "No URL in response");
       return data as { url: string };
     }
-    // Intermediate chunk — just keep going
     if (data.error) throw new Error(data.error);
   }
 

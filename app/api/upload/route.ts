@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, readFile, unlink, mkdir } from "fs/promises";
+
+// Allow up to 60 s so the Vercel proxy can wait for Render to wake from sleep.
+// On Hobby this is capped at 10 s by Vercel; on Pro it uses the full 60 s.
+export const maxDuration = 60;
 import { join } from "path";
 import { existsSync } from "fs";
 import { gunzipSync } from "zlib";
