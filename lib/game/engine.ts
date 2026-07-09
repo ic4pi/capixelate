@@ -1002,34 +1002,44 @@ export class GameEngine {
     let camPos: THREE.Vector3;
     let lookTarget: THREE.Vector3;
 
+    // Right-perpendicular vector (horizontal plane, world-space right of heading)
+    const rightX = -fwdZ;
+    const rightZ =  fwdX;
+
     if (this.cameraMode === 1) {
       // ── Mode 1: Hover / Cinematic follow cam ───────────────────────────────
-      // Camera hovers above and behind the ship; zoom moves it further back
-      // (and slightly higher). The look direction is always level with the
-      // horizon so the view never tilts up or down.
-      //   z=0 (close):  20 units back, 12 units up
-      //   z=1 (far):    38 units back, 20 units up
-      const camDist   = 20 + 18 * z;
-      const camHeight = 12 + 8  * z;
+      // Camera sits well back and above the ship. Offset 10 units to the right
+      // so the ship drifts to the LEFT of center — the horizon stays clear.
+      // Scroll back = camera moves further back (and a touch higher).
+      //   z=0 (close):  35 back, 14 up
+      //   z=1 (far):    55 back, 22 up
+      const camDist    = 35 + 20 * z;
+      const camHeight  = 14 + 8  * z;
+      const sideOffset = 10;           // ship is left of center in frame
+
       camPos = this.playerShip.position.clone().add(new THREE.Vector3(
-        fwdX * -camDist, camHeight, fwdZ * -camDist
+        fwdX * -camDist + rightX * sideOffset,
+        camHeight,
+        fwdZ * -camDist + rightZ * sideOffset
       ));
       this.camera.position.lerp(camPos, 0.05);
 
-      // Look straight ahead at the same height as the camera so the horizon
-      // stays perfectly level regardless of zoom level.
+      // Look target stays centered on the ship's forward axis — this is what
+      // keeps the ship visually left while the view remains straight ahead.
       lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
-        fwdX * 80, camHeight - 1, fwdZ * 80
+        fwdX * 80, camHeight - 2, fwdZ * 80
       ));
       this.camera.lookAt(lookTarget);
 
     } else {
       // ── Mode 0: Deck / Crow's-nest (default) ──────────────────────────────
-      // Camera sits BEHIND ship center so the player sees the bow and sea ahead.
-      //   z=0 deck:       5 units behind center, 5 units up
-      //   z=1 crow's nest: 9 units behind,      20 units up
-      const camFwd = -5 - 4 * z;
-      const camUp  =  5 + 15 * (z * z);
+      // Deck view:       camera AHEAD of the masts so the sails are BEHIND the
+      //                  camera — you see clear ocean with the bow rail below.
+      // Crow's-nest:     camera rises high and slides back for full horizon.
+      //   z=0 deck:      10 units ahead of center, 4 units up
+      //   z=1 crow's:    -6 units (behind),       22 units up
+      const camFwd = 10 - 16 * z;
+      const camUp  =  4 + 18 * (z * z);
       camPos = this.playerShip.position.clone().add(new THREE.Vector3(
         fwdX * camFwd, camUp, fwdZ * camFwd
       ));
@@ -1044,10 +1054,10 @@ export class GameEngine {
         lookDist = Math.max(12, toIsland.length() * 0.9);
         lookY = 14;
       } else {
-        //   z=0: look 30 units ahead (bow + near ocean)
-        //   z=1: look 280 units ahead (full horizon)
-        lookDist = 30 + 250 * (z * z);
-        lookY = 3;
+        //   z=0: 50 units ahead (clean ocean + bow rail in frame)
+        //   z=1: 300 units ahead (full horizon visible)
+        lookDist = 50 + 250 * (z * z);
+        lookY = 3 + 2 * z;
       }
       lookTarget = this.playerShip.position.clone().add(new THREE.Vector3(
         fwdX * lookDist, lookY, fwdZ * lookDist

@@ -922,10 +922,10 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("category", category);
-      // Upload directly to Render when API_BASE is set — avoids the Vercel proxy
-      // and ensures the file lands on Render's persistent disk alongside the DB.
-      const uploadUrl = apiUrl("/api/upload");
-      const res = await fetch(uploadUrl, { method: "POST", body: fd });
+      // Always upload through the local /api/upload route — on Vercel this
+      // proxies to Render; on Render it saves directly. This avoids cross-origin
+      // issues and cold-start timeouts when hitting Render directly from mobile.
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await res.json();
       if (data.url) onUpload(data.url);
       else alert(`Upload failed: ${data.error ?? "unknown error"}`);
