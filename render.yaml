@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: (npx prisma migrate deploy || echo "DB migration skipped — will retry on next deploy") && npm start
+    startCommand: npm start
     disk:
       name: capixelate-data
       mountPath: /var/data

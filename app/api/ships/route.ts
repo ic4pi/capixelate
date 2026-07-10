@@ -3,12 +3,11 @@ import { prisma } from "@/lib/db";
 
 export async function GET() {
   try {
-    const ships = await prisma.ship.findMany({
-      where: { isActive: true },
-    });
+    const ships = await prisma.ship.findMany({ where: { isActive: true } });
     return NextResponse.json({ ships });
-  } catch {
-    return NextResponse.json({ error: "Failed to fetch ships" }, { status: 500 });
+  } catch (err) {
+    console.error("GET /api/ships:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
@@ -24,7 +23,8 @@ export async function POST(req: NextRequest) {
       },
     });
     return NextResponse.json({ ship });
-  } catch {
-    return NextResponse.json({ error: "Failed to create ship" }, { status: 500 });
+  } catch (err) {
+    console.error("POST /api/ships:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

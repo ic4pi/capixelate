@@ -9,8 +9,9 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     });
     return NextResponse.json({ islands });
-  } catch {
-    return NextResponse.json({ error: "Failed to fetch islands" }, { status: 500 });
+  } catch (err) {
+    console.error("GET /api/islands:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
@@ -28,7 +29,8 @@ export async function POST(req: NextRequest) {
       },
     });
     return NextResponse.json({ island });
-  } catch {
-    return NextResponse.json({ error: "Failed to create island" }, { status: 500 });
+  } catch (err) {
+    console.error("POST /api/islands:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
