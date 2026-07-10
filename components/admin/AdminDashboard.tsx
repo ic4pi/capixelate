@@ -918,29 +918,54 @@ const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB — safely under Vercel's 4.5 MB lim
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
- * POST one FormData payload to /api/upload with automatic retries.
- * Render's free tier can take 30-50 s to wake from sleep; each Vercel
- * function proxy attempt may time out.  Retrying after a short wait
- * catches the service once it's running again.
+ * Fire a silent GET to Render so it starts waking from sleep immediately.
+ * Uses no-cors so CORS errors are ignored — we only care that the TCP
+ * connection wakes the dyno, not about the response.
  */
-async function postChunk(fd: FormData, attempt = 0): Promise<Response> {
-  const MAX_RETRIES = 4;
-  const RETRY_DELAY = [8000, 12000, 15000, 20000]; // ms
+function preWarmRender() {
+  if (!API_BASE) return;
+  fetch(`${API_BASE}/api/islands`, { mode: "no-cors" }).catch(() => {});
+}
+
+// Retryable HTTP statuses from a sleeping / starting Render service
+const RETRYABLE = new Set([404, 502, 503, 504]);
+
+/**
+ * POST one FormData chunk to /api/upload with automatic retries.
+ * Render free tier takes 30-50 s to wake; each Vercel proxy attempt may
+ * time out in ≤10 s (Hobby) or 60 s (Pro). We retry with increasing delays
+ * so the 2nd or 3rd attempt lands after Render is running.
+ */
+async function postChunk(
+  fd: FormData,
+  attempt = 0,
+  onStatus?: (msg: string) => void
+): Promise<Response> {
+  const MAX_RETRIES = 5;
+  // Delays chosen so total elapsed time reaches ~45-55 s, by which point
+  // Render's free dyno is reliably awake (cold start is 30-50 s).
+  const RETRY_DELAY = [10000, 12000, 14000, 16000, 18000]; // ms
 
   try {
     const res = await fetch("/api/upload", { method: "POST", body: fd });
-    // Treat 404/503 from sleeping Render as retryable
-    if ((res.status === 404 || res.status === 503) && attempt < MAX_RETRIES) {
-      await sleep(RETRY_DELAY[attempt]);
-      return postChunk(fd, attempt + 1);
+    if (RETRYABLE.has(res.status) && attempt < MAX_RETRIES) {
+      const wait = RETRY_DELAY[attempt];
+      onStatus?.(`Server waking up… retrying in ${wait / 1000} s (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      await sleep(wait);
+      return postChunk(fd, attempt + 1, onStatus);
     }
     return res;
   } catch {
     if (attempt < MAX_RETRIES) {
-      await sleep(RETRY_DELAY[attempt]);
-      return postChunk(fd, attempt + 1);
+      const wait = RETRY_DELAY[attempt];
+      onStatus?.(`Reconnecting… retrying in ${wait / 1000} s (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      await sleep(wait);
+      return postChunk(fd, attempt + 1, onStatus);
     }
-    throw new Error("Upload failed after several retries. Check that your Render service is running.");
+    throw new Error(
+      "Upload failed after several retries. " +
+      "Make sure your Render service is deployed and DATABASE_URL / UPLOAD_DIR are set."
+    );
   }
 }
 
@@ -976,7 +1001,7 @@ async function uploadFile(
       fd.append("totalChunks", String(totalChunks));
     }
 
-    const res  = await postChunk(fd);
+    const res  = await postChunk(fd, 0, onProgress);
     const ct   = res.headers.get("content-type") ?? "";
     if (!ct.includes("application/json")) {
       throw new Error(`HTTP ${res.status} — server returned non-JSON. Render may still be starting.`);
@@ -1006,7 +1031,9 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setStatus("");
+    setStatus("Waking up server…");
+    // Fire pre-warm immediately — gives Render a head-start before we upload
+    preWarmRender();
 
     try {
       let fileToUpload = file;
