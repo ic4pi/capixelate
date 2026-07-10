@@ -48,7 +48,11 @@ export default function GameHUD({
   const phase = hudState.gamePhase ?? "sailing";
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640);
+    // Show touch controls on any touch device regardless of screen width
+    const check = () =>
+      setIsMobile(
+        "ontouchstart" in window || navigator.maxTouchPoints > 0 || window.innerWidth < 1024
+      );
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -369,35 +373,30 @@ export default function GameHUD({
         </div>
       )}
 
-      {/* ===== ON-ISLAND BANNER (top of screen when walking on island) ===== */}
+      {/* ===== ON-ISLAND OVERLAY — giant leave button ===== */}
       {onIsland && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+        <div className="absolute inset-x-0 bottom-48 z-50 flex flex-col items-center gap-3 pointer-events-none">
           <div
-            className="flex items-center gap-3 px-5 py-2.5 rounded-2xl"
+            className="pointer-events-auto text-center px-6 py-2 rounded-xl"
+            style={{ background: "rgba(0,0,0,0.6)", border: "1px solid #00ffcc44" }}
+          >
+            <p className="text-cyan-300 text-xs font-mono tracking-widest">
+              🏝 ON ISLAND — back arrow to return to ship
+            </p>
+          </div>
+          <button
+            onClick={onLeaveIsland}
+            className="pointer-events-auto text-lg font-bold px-10 py-4 rounded-2xl"
             style={{
-              background: "rgba(0,0,0,0.78)",
-              border: "1.5px solid #00ffcc88",
-              boxShadow: "0 0 24px #00ffcc33",
+              background: "rgba(180,20,20,0.92)",
+              border: "2px solid #ef4444",
+              color: "#fff",
+              boxShadow: "0 0 30px #ef444488",
+              letterSpacing: "0.1em",
             }}
           >
-            <span className="text-cyan-300 text-sm font-mono tracking-widest">
-              🏝 EXPLORING ISLAND
-            </span>
-            <span className="text-slate-500 text-xs font-mono">
-              WASD / arrows to walk
-            </span>
-            <button
-              onClick={onLeaveIsland}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg ml-2"
-              style={{
-                background: "rgba(180,30,30,0.7)",
-                border: "1px solid #ef444466",
-                color: "#fca5a5",
-              }}
-            >
-              ✕ LEAVE
-            </button>
-          </div>
+            ⛵ RETURN TO SHIP
+          </button>
         </div>
       )}
 
