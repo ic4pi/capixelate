@@ -385,7 +385,7 @@ export class GameEngine {
     lanternLight.position.copy(lanternMesh.position);
     this.playerShip.add(lanternLight);
 
-    this.playerShip.position.set(0, 0.5, 0);
+    this.playerShip.position.set(0, 0.5, 180); // start in open water, islands are at -Z
     this.playerShip.rotation.y = Math.PI; // face toward islands at start
     this.scene.add(this.playerShip);
 
