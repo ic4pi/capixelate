@@ -140,10 +140,10 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const [pr, isl, en, sh] = await Promise.all([
-        fetch("/api/projects").then((r) => r.json()),
-        fetch("/api/islands").then((r) => r.json()),
-        fetch("/api/enemies").then((r) => r.json()),
-        fetch("/api/ships").then((r) => r.json()),
+        fetch(apiUrl("/api/projects")).then((r) => r.json()),
+        fetch(apiUrl("/api/islands")).then((r) => r.json()),
+        fetch(apiUrl("/api/enemies")).then((r) => r.json()),
+        fetch(apiUrl("/api/ships")).then((r) => r.json()),
       ]);
       setProjects(pr.projects ?? []);
       setIslands(isl.islands ?? []);
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
   // Seed demo data
   const handleSeed = async () => {
     if (!confirm("This will replace all data with demo data. Continue?")) return;
-    const res = await fetch("/api/seed", { method: "POST" });
+    const res = await fetch(apiUrl("/api/seed"), { method: "POST" });
     const data = await res.json();
     if (data.success) {
       showToast("Demo data seeded!");
@@ -284,8 +284,8 @@ export default function AdminDashboard() {
     if (!editingProject) return;
     const method = editingProject.id ? "PUT" : "POST";
     const url = editingProject.id
-      ? `/api/projects/${editingProject.id}`
-      : "/api/projects";
+      ? apiUrl(`/api/projects/${editingProject.id}`)
+      : apiUrl("/api/projects");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -303,7 +303,7 @@ export default function AdminDashboard() {
 
   const deleteProject = async (id: string) => {
     if (!confirm("Delete this project?")) return;
-    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/projects/${id}`), { method: "DELETE" });
     showToast("Project deleted");
     loadAll();
   };
@@ -315,8 +315,8 @@ export default function AdminDashboard() {
     if (!editingIsland) return;
     const method = editingIsland.id ? "PUT" : "POST";
     const url = editingIsland.id
-      ? `/api/islands/${editingIsland.id}`
-      : "/api/islands";
+      ? apiUrl(`/api/islands/${editingIsland.id}`)
+      : apiUrl("/api/islands");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -334,7 +334,7 @@ export default function AdminDashboard() {
 
   const deleteIsland = async (id: string) => {
     if (!confirm("Delete this island?")) return;
-    await fetch(`/api/islands/${id}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/islands/${id}`), { method: "DELETE" });
     showToast("Island deleted");
     loadAll();
   };
@@ -346,8 +346,8 @@ export default function AdminDashboard() {
     if (!editingEnemy) return;
     const method = editingEnemy.id ? "PUT" : "POST";
     const url = editingEnemy.id
-      ? `/api/enemies/${editingEnemy.id}`
-      : "/api/enemies";
+      ? apiUrl(`/api/enemies/${editingEnemy.id}`)
+      : apiUrl("/api/enemies");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -365,7 +365,7 @@ export default function AdminDashboard() {
 
   const deleteEnemy = async (id: string) => {
     if (!confirm("Delete this enemy?")) return;
-    await fetch(`/api/enemies/${id}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/enemies/${id}`), { method: "DELETE" });
     showToast("Enemy deleted");
     loadAll();
   };
@@ -377,8 +377,8 @@ export default function AdminDashboard() {
     if (!editingShip) return;
     const method = editingShip.id ? "PUT" : "POST";
     const url = editingShip.id
-      ? `/api/ships/${editingShip.id}`
-      : "/api/ships";
+      ? apiUrl(`/api/ships/${editingShip.id}`)
+      : apiUrl("/api/ships");
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -906,118 +906,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 const inputCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500 text-sm";
 const selectCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500 text-sm";
 
-/** Compress a File using the browser's built-in gzip CompressionStream. */
-async function gzipFile(file: File): Promise<File> {
-  const stream = file.stream().pipeThrough(new CompressionStream("gzip"));
-  const blob = await new Response(stream).blob();
-  return new File([blob], file.name + ".gz", { type: "application/gzip" });
-}
-
-const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB — safely under Vercel's 4.5 MB limit
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/**
- * Fire a silent GET to Render so it starts waking from sleep immediately.
- * Uses no-cors so CORS errors are ignored — we only care that the TCP
- * connection wakes the dyno, not about the response.
- */
-function preWarmRender() {
-  if (!API_BASE) return;
-  fetch(`${API_BASE}/api/islands`, { mode: "no-cors" }).catch(() => {});
-}
-
-// Retryable HTTP statuses from a sleeping / starting Render service
-const RETRYABLE = new Set([404, 502, 503, 504]);
-
-/**
- * POST one FormData chunk to /api/upload with automatic retries.
- * Render free tier takes 30-50 s to wake; each Vercel proxy attempt may
- * time out in ≤10 s (Hobby) or 60 s (Pro). We retry with increasing delays
- * so the 2nd or 3rd attempt lands after Render is running.
- */
-async function postChunk(
-  fd: FormData,
-  attempt = 0,
-  onStatus?: (msg: string) => void
-): Promise<Response> {
-  const MAX_RETRIES = 5;
-  // Delays chosen so total elapsed time reaches ~45-55 s, by which point
-  // Render's free dyno is reliably awake (cold start is 30-50 s).
-  const RETRY_DELAY = [10000, 12000, 14000, 16000, 18000]; // ms
-
-  try {
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
-    if (RETRYABLE.has(res.status) && attempt < MAX_RETRIES) {
-      const wait = RETRY_DELAY[attempt];
-      onStatus?.(`Server waking up… retrying in ${wait / 1000} s (attempt ${attempt + 1}/${MAX_RETRIES})`);
-      await sleep(wait);
-      return postChunk(fd, attempt + 1, onStatus);
-    }
-    return res;
-  } catch {
-    if (attempt < MAX_RETRIES) {
-      const wait = RETRY_DELAY[attempt];
-      onStatus?.(`Reconnecting… retrying in ${wait / 1000} s (attempt ${attempt + 1}/${MAX_RETRIES})`);
-      await sleep(wait);
-      return postChunk(fd, attempt + 1, onStatus);
-    }
-    throw new Error(
-      "Upload failed after several retries. " +
-      "Make sure your Render service is deployed and DATABASE_URL / UPLOAD_DIR are set."
-    );
-  }
-}
-
-/**
- * Upload a file in chunks through the Vercel proxy.
- * Handles any file size; retries automatically if Render is sleeping.
- */
-async function uploadFile(
-  file: File,
-  category: string,
-  onProgress: (msg: string) => void
-): Promise<{ url: string }> {
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  const uploadId    = totalChunks > 1 ? crypto.randomUUID() : null;
-
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE;
-    const chunk = file.slice(start, start + CHUNK_SIZE);
-
-    onProgress(
-      totalChunks > 1
-        ? `Uploading part ${i + 1} / ${totalChunks}… (if slow, Render is waking up)`
-        : "Uploading…"
-    );
-
-    const fd = new FormData();
-    fd.append("file", new File([chunk], file.name, { type: file.type }));
-    fd.append("category", category);
-    fd.append("originalName", file.name);
-    if (uploadId) {
-      fd.append("uploadId",    uploadId);
-      fd.append("chunkIndex",  String(i));
-      fd.append("totalChunks", String(totalChunks));
-    }
-
-    const res  = await postChunk(fd, 0, onProgress);
-    const ct   = res.headers.get("content-type") ?? "";
-    if (!ct.includes("application/json")) {
-      throw new Error(`HTTP ${res.status} — server returned non-JSON. Render may still be starting.`);
-    }
-    const data = await res.json();
-
-    if (i === totalChunks - 1) {
-      if (!data.url) throw new Error(data.error ?? "No URL in response");
-      return data as { url: string };
-    }
-    if (data.error) throw new Error(data.error);
-  }
-
-  throw new Error("Upload loop ended without a URL");
-}
-
 function FileUploadField({ label, category, currentUrl, onUpload }: {
   label: string;
   category: string;
@@ -1031,28 +919,76 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setStatus("Waking up server…");
-    // Fire pre-warm immediately — gives Render a head-start before we upload
-    preWarmRender();
+    setStatus("Uploading…");
 
     try {
-      let fileToUpload = file;
-      const isGlb = /\.(glb|gltf)$/i.test(file.name);
-
-      // Compress GLB/GLTF in the browser first (reduces chunk count)
-      if (isGlb && file.size > 512 * 1024) {
-        setStatus(`Compressing… (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
-        fileToUpload = await gzipFile(file);
-        const savings = Math.round((1 - fileToUpload.size / file.size) * 100);
-        setStatus(`Compressed ${savings}% (${(fileToUpload.size / 1024 / 1024).toFixed(1)} MB) — uploading…`);
-      } else {
-        setStatus("Uploading…");
+      // ── Try Vercel Blob first (no Render needed, no size limit) ──────────
+      // Requires BLOB_READ_WRITE_TOKEN set in Vercel project settings.
+      try {
+        const { upload } = await import("@vercel/blob/client");
+        setStatus("Uploading to Vercel Blob…");
+        const result = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+        });
+        onUpload(result.url);
+        setStatus("✓ Uploaded");
+        return;
+      } catch (blobErr) {
+        const msg = String(blobErr);
+        if (!msg.includes("BLOB_NOT_CONFIGURED") && !msg.includes("501")) {
+          // Real blob error — log it but still fall through to proxy
+          console.warn("Vercel Blob error:", blobErr);
+        }
+        // Not configured — fall through to proxy below
       }
 
-      // Chunked upload — all through the same-origin Vercel proxy, no size limit
-      const data = await uploadFile(fileToUpload, category, setStatus);
-      onUpload(data.url);
-      setStatus("✓ Uploaded successfully");
+      // ── Fallback: proxy through Vercel → Render ──────────────────────────
+      // Each chunk is ≤ 3 MB so it stays under Vercel's 4.5 MB limit.
+      const CHUNK = 3 * 1024 * 1024;
+      const totalChunks = Math.ceil(file.size / CHUNK);
+      const uploadId = totalChunks > 1 ? crypto.randomUUID() : null;
+
+      for (let i = 0; i < totalChunks; i++) {
+        setStatus(totalChunks > 1
+          ? `Uploading part ${i + 1}/${totalChunks}… (Render may need ~30 s to wake)`
+          : "Uploading via proxy…"
+        );
+
+        const chunk = file.slice(i * CHUNK, (i + 1) * CHUNK);
+        const fd = new FormData();
+        fd.append("file", new File([chunk], file.name, { type: file.type }));
+        fd.append("category", category);
+        fd.append("originalName", file.name);
+        if (uploadId) {
+          fd.append("uploadId", uploadId);
+          fd.append("chunkIndex", String(i));
+          fd.append("totalChunks", String(totalChunks));
+        }
+
+        // Retry on 404/502/503/504 (Render sleeping)
+        let res!: Response;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          res = await fetch("/api/upload", { method: "POST", body: fd });
+          if (![404, 502, 503, 504].includes(res.status)) break;
+          const wait = [10, 12, 14, 16, 18][attempt] * 1000;
+          setStatus(`Server waking up… retry in ${wait / 1000}s (${attempt + 1}/5)`);
+          await new Promise(r => setTimeout(r, wait));
+        }
+
+        const ct = res.headers.get("content-type") ?? "";
+        if (!ct.includes("application/json")) {
+          throw new Error(`HTTP ${res.status} — server returned non-JSON. Check Render logs.`);
+        }
+        const data = await res.json();
+        if (i === totalChunks - 1) {
+          if (!data.url) throw new Error(data.error ?? "No URL in response");
+          onUpload(data.url);
+          setStatus("✓ Uploaded");
+          return;
+        }
+        if (data.error) throw new Error(data.error);
+      }
     } catch (err) {
       alert(`Upload error: ${err}`);
       setStatus("");
@@ -1075,7 +1011,7 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
             {status}
           </div>
         )}
-        {currentUrl && !status && (
+        {!status && currentUrl && (
           <div className="text-xs text-purple-400 truncate">✓ {currentUrl}</div>
         )}
       </div>
