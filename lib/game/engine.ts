@@ -1050,10 +1050,13 @@ export class GameEngine {
       const walkSpeed   = 18;
       const approachSpd = 20;
 
-      if (input.left)     this.islandWalkAngle += (walkSpeed / Math.max(this.islandWalkRadius, 10)) * delta;
-      if (input.right)    this.islandWalkAngle -= (walkSpeed / Math.max(this.islandWalkRadius, 10)) * delta;
-      if (input.forward)  this.islandWalkRadius = Math.max(4,  this.islandWalkRadius - approachSpd * delta);
-      if (input.backward) this.islandWalkRadius = Math.min(90, this.islandWalkRadius + approachSpd * delta);
+      if (input.left)  this.islandWalkAngle += (walkSpeed / Math.max(this.islandWalkRadius, 10)) * delta;
+      if (input.right) this.islandWalkAngle -= (walkSpeed / Math.max(this.islandWalkRadius, 10)) * delta;
+      if (input.forward) this.islandWalkRadius = Math.max(4, this.islandWalkRadius - approachSpd * delta);
+      if (input.backward) {
+        this.islandWalkRadius += approachSpd * delta;
+        if (this.islandWalkRadius > 92) { this.leaveIsland(); return; } // walk back to ship
+      }
 
       // Camera sits behind the walker and looks at the campfire/portal
       const camDist = this.islandWalkRadius + 14;
