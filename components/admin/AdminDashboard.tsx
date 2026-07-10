@@ -140,10 +140,10 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const [pr, isl, en, sh] = await Promise.all([
-        fetch(apiUrl("/api/projects")).then((r) => r.json()),
-        fetch(apiUrl("/api/islands")).then((r) => r.json()),
-        fetch(apiUrl("/api/enemies")).then((r) => r.json()),
-        fetch(apiUrl("/api/ships")).then((r) => r.json()),
+        fetch("/api/projects").then((r) => r.json()),
+        fetch("/api/islands").then((r) => r.json()),
+        fetch("/api/enemies").then((r) => r.json()),
+        fetch("/api/ships").then((r) => r.json()),
       ]);
       setProjects(pr.projects ?? []);
       setIslands(isl.islands ?? []);
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
   // Seed demo data
   const handleSeed = async () => {
     if (!confirm("This will replace all data with demo data. Continue?")) return;
-    const res = await fetch(apiUrl("/api/seed"), { method: "POST" });
+    const res = await fetch("/api/seed", { method: "POST" });
     const data = await res.json();
     if (data.success) {
       showToast("Demo data seeded!");
@@ -284,8 +284,8 @@ export default function AdminDashboard() {
     if (!editingProject) return;
     const method = editingProject.id ? "PUT" : "POST";
     const url = editingProject.id
-      ? apiUrl(`/api/projects/${editingProject.id}`)
-      : apiUrl("/api/projects");
+      ? `/api/projects/${editingProject.id}`
+      : "/api/projects";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -303,7 +303,7 @@ export default function AdminDashboard() {
 
   const deleteProject = async (id: string) => {
     if (!confirm("Delete this project?")) return;
-    await fetch(apiUrl(`/api/projects/${id}`), { method: "DELETE" });
+    await fetch(`/api/projects/${id}`, { method: "DELETE" });
     showToast("Project deleted");
     loadAll();
   };
@@ -315,8 +315,8 @@ export default function AdminDashboard() {
     if (!editingIsland) return;
     const method = editingIsland.id ? "PUT" : "POST";
     const url = editingIsland.id
-      ? apiUrl(`/api/islands/${editingIsland.id}`)
-      : apiUrl("/api/islands");
+      ? `/api/islands/${editingIsland.id}`
+      : "/api/islands";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -334,7 +334,7 @@ export default function AdminDashboard() {
 
   const deleteIsland = async (id: string) => {
     if (!confirm("Delete this island?")) return;
-    await fetch(apiUrl(`/api/islands/${id}`), { method: "DELETE" });
+    await fetch(`/api/islands/${id}`, { method: "DELETE" });
     showToast("Island deleted");
     loadAll();
   };
@@ -346,8 +346,8 @@ export default function AdminDashboard() {
     if (!editingEnemy) return;
     const method = editingEnemy.id ? "PUT" : "POST";
     const url = editingEnemy.id
-      ? apiUrl(`/api/enemies/${editingEnemy.id}`)
-      : apiUrl("/api/enemies");
+      ? `/api/enemies/${editingEnemy.id}`
+      : "/api/enemies";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -365,7 +365,7 @@ export default function AdminDashboard() {
 
   const deleteEnemy = async (id: string) => {
     if (!confirm("Delete this enemy?")) return;
-    await fetch(apiUrl(`/api/enemies/${id}`), { method: "DELETE" });
+    await fetch(`/api/enemies/${id}`, { method: "DELETE" });
     showToast("Enemy deleted");
     loadAll();
   };
@@ -377,8 +377,8 @@ export default function AdminDashboard() {
     if (!editingShip) return;
     const method = editingShip.id ? "PUT" : "POST";
     const url = editingShip.id
-      ? apiUrl(`/api/ships/${editingShip.id}`)
-      : apiUrl("/api/ships");
+      ? `/api/ships/${editingShip.id}`
+      : "/api/ships";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },

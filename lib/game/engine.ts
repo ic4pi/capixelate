@@ -345,7 +345,8 @@ export class GameEngine {
     foreMast.position.set(5, 7.5, 0);
     this.playerShip.add(foreMast);
 
-    // Sails
+    // Sails — hidden on the procedural model so they don't block the camera.
+    // A custom GLB (uploaded in admin) replaces this entire model anyway.
     const sailMat = new THREE.MeshLambertMaterial({
       color: 0xe8dcc8,
       side: THREE.DoubleSide,
@@ -354,12 +355,14 @@ export class GameEngine {
     const mainSail = new THREE.Mesh(mainSailGeo, sailMat);
     mainSail.position.set(1, 10, 0.1);
     mainSail.name = "mainSail";
+    mainSail.visible = false;
     this.playerShip.add(mainSail);
 
     const foreSailGeo = new THREE.PlaneGeometry(4, 6);
     const foreSail = new THREE.Mesh(foreSailGeo, sailMat);
     foreSail.position.set(5, 8.5, 0.1);
     foreSail.name = "foreSail";
+    foreSail.visible = false;
     this.playerShip.add(foreSail);
 
     // Skull flag
@@ -399,9 +402,9 @@ export class GameEngine {
     this.playerShip.rotation.y = Math.PI; // face toward islands at start
     this.scene.add(this.playerShip);
 
-    // Initial camera: mid-ship deck, looking forward over the bow toward islands
-    this.camera.position.set(0, 5, 5);
-    this.camera.lookAt(0, 4, -30);
+    // Initial camera: behind ship at deck height, looking forward toward islands
+    this.camera.position.set(0, 6, 6);
+    this.camera.lookAt(0, 5, -40);
 
     if (modelUrl) {
       this.loadGLB(modelUrl)
@@ -1105,13 +1108,12 @@ export class GameEngine {
 
     } else {
       // ── Mode 0: Deck / Crow's-nest (default) ──────────────────────────────
-      // Deck view:       camera AHEAD of the masts so the sails are BEHIND the
-      //                  camera — you see clear ocean with the bow rail below.
-      // Crow's-nest:     camera rises high and slides back for full horizon.
-      //   z=0 deck:      10 units ahead of center, 4 units up
-      //   z=1 crow's:    -6 units (behind),       22 units up
-      const camFwd = 10 - 16 * z;
-      const camUp  =  4 + 18 * (z * z);
+      // Camera sits behind the ship at deck height. Procedural sails are
+      // hidden so nothing blocks the forward view.
+      //   z=0 deck:       6 units behind center, 6 units up
+      //   z=1 crow's nest: 14 units behind,     22 units up
+      const camFwd = -6 - 8 * z;
+      const camUp  =  6 + 16 * (z * z);
       camPos = this.playerShip.position.clone().add(new THREE.Vector3(
         fwdX * camFwd, camUp, fwdZ * camFwd
       ));
