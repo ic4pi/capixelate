@@ -108,8 +108,8 @@ export class GameEngine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.82;
+    this.renderer.toneMapping = THREE.ReinhardToneMapping; // gentler than ACES — doesn't crush midtones
+    this.renderer.toneMappingExposure = 2.2;               // bright harvest-moon night
     this.clock = new THREE.Clock();
   }
 
@@ -119,7 +119,7 @@ export class GameEngine {
   private initScene() {
     this.scene = new THREE.Scene();
     // Low fog density — islands visible from 200+ units, harvest moon glows through
-    this.scene.fog = new THREE.FogExp2(0x060e1a, 0.0008);
+    this.scene.fog = new THREE.FogExp2(0x060e1a, 0.0005);
   }
 
   private initCamera() {
@@ -135,31 +135,31 @@ export class GameEngine {
   }
 
   private initLights() {
-    // Bright ambient for harvest-moon night — warm orange-tinted sky
-    const ambientLight = new THREE.AmbientLight(0x3a4060, 1.8);
+    // Strong ambient — full harvest moon lights up the whole scene
+    const ambientLight = new THREE.AmbientLight(0x6070a0, 3.5);
     this.scene.add(ambientLight);
 
-    // Main moonlight — strong, warm harvest-moon directional light
-    this.moonLight = new THREE.DirectionalLight(0xffd4a0, 5.0);
+    // Main moonlight directional — bright, warm gold
+    this.moonLight = new THREE.DirectionalLight(0xffd4a0, 8.0);
     this.moonLight.position.copy(this.moonWorldPos);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.camera.near = 0.5;
     this.moonLight.shadow.camera.far = 1500;
-    this.moonLight.shadow.camera.left = -400;
-    this.moonLight.shadow.camera.right = 400;
-    this.moonLight.shadow.camera.top = 400;
-    this.moonLight.shadow.camera.bottom = -400;
+    this.moonLight.shadow.camera.left = -600;
+    this.moonLight.shadow.camera.right = 600;
+    this.moonLight.shadow.camera.top = 600;
+    this.moonLight.shadow.camera.bottom = -600;
     this.moonLight.shadow.mapSize.width = 2048;
     this.moonLight.shadow.mapSize.height = 2048;
     this.scene.add(this.moonLight);
 
-    // Warm fill light from opposite horizon
-    const fillLight = new THREE.PointLight(0x5566aa, 1.2, 1000);
-    fillLight.position.set(200, 80, 200);
+    // Wide fill from opposite side — lifts shadow areas
+    const fillLight = new THREE.PointLight(0x7788cc, 2.5, 2000);
+    fillLight.position.set(300, 120, 300);
     this.scene.add(fillLight);
 
-    // Hemisphere: warm sky above, deep ocean below — lifts all shadows
-    const skyFill = new THREE.HemisphereLight(0x3355bb, 0x0a1a2a, 0.9);
+    // Hemisphere — sky blue-white above, dark ocean below
+    const skyFill = new THREE.HemisphereLight(0x5577cc, 0x0a1a2a, 2.0);
     this.scene.add(skyFill);
   }
 
@@ -599,10 +599,15 @@ export class GameEngine {
       group.add(portalGroup);
     }
 
-    // Extra fill light positioned above the island to ensure it's always visible
-    const islandFill = new THREE.PointLight(0xffc080, 2.0, 120);
-    islandFill.position.set(0, 25, 0);
-    group.add(islandFill);
+    // Two fill lights: one high (wide coverage) + one low (terrain surface)
+    // Range must cover the full beach radius (~90 units) from island center
+    const islandFillHigh = new THREE.PointLight(0xffc880, 6.0, 500);
+    islandFillHigh.position.set(0, 60, 0);
+    group.add(islandFillHigh);
+
+    const islandFillLow = new THREE.PointLight(0xffa060, 4.0, 350);
+    islandFillLow.position.set(0, 8, 0);
+    group.add(islandFillLow);
 
     group.position.set(island.position.x, 0, island.position.z);
     this.scene.add(group);
@@ -668,8 +673,8 @@ export class GameEngine {
     firePoints.name = "fireParticles";
     group.add(firePoints);
 
-    // Fire light — bright, wide range to illuminate the whole island
-    const fireLight = new THREE.PointLight(0xff6600, 6, 70);
+    // Fire light — large range so the campfire illuminates surrounding terrain
+    const fireLight = new THREE.PointLight(0xff6600, 10, 180);
     fireLight.position.y = 2;
     fireLight.name = "fireLight";
     group.add(fireLight);
@@ -1369,7 +1374,7 @@ export class GameEngine {
       if (campfireGroup) {
         const fireLight = campfireGroup.getObjectByName("fireLight") as THREE.PointLight;
         if (fireLight) {
-          fireLight.intensity = 6 + Math.sin(time * 8 + state.position.x) * 2 + Math.sin(time * 13) * 1;
+          fireLight.intensity = 10 + Math.sin(time * 8 + state.position.x) * 3 + Math.sin(time * 13) * 2;
         }
         const fireParticles = campfireGroup.getObjectByName("fireParticles") as THREE.Points;
         if (fireParticles && fireParticles.geometry.attributes.position) {
