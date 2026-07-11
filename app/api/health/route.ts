@@ -18,6 +18,11 @@ export async function GET() {
     dbStatus = `ERROR: ${String(err)}`;
   }
 
+  // List all env vars containing BLOB so we can spot a renamed/prefixed token
+  const blobEnvVars = Object.keys(process.env)
+    .filter((k) => k.toUpperCase().includes("BLOB"))
+    .sort();
+
   return NextResponse.json({
     // — Required for the game to work —
     database_url:            dbUrl.replace(/\/\/[^@]+@/, "//***@"),
@@ -26,6 +31,8 @@ export async function GET() {
     admin_username:          hasAdminUser  ? "set ✓" : "NOT SET ✗",
     admin_password:          hasAdminPass  ? "set ✓" : "NOT SET ✗",
     nextauth_secret:         hasNextAuth   ? "set ✓" : "NOT SET ✗",
+    // — Diagnostic: all BLOB-related env var names visible to this deployment —
+    blob_env_vars_found:     blobEnvVars.length > 0 ? blobEnvVars : "(none)",
     // — DB connection test —
     db_connection: dbStatus,
     node_env: process.env.NODE_ENV,
