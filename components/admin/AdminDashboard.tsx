@@ -912,6 +912,7 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
   currentUrl?: string;
   onUpload: (url: string) => void;
 }) {
+  void category;
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -922,73 +923,15 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
     setStatus("Uploading…");
 
     try {
-      // ── Try Vercel Blob first (no Render needed, no size limit) ──────────
-      // Requires BLOB_READ_WRITE_TOKEN set in Vercel project settings.
-      try {
-        const { upload } = await import("@vercel/blob/client");
-        setStatus("Uploading to Vercel Blob…");
-        const result = await upload(file.name, file, {
-          access: "public",
-          handleUploadUrl: "/api/upload",
-        });
-        onUpload(result.url);
-        setStatus("✓ Uploaded");
-        return;
-      } catch (blobErr) {
-        const msg = String(blobErr);
-        if (!msg.includes("BLOB_NOT_CONFIGURED") && !msg.includes("501")) {
-          // Real blob error — log it but still fall through to proxy
-          console.warn("Vercel Blob error:", blobErr);
-        }
-        // Not configured — fall through to proxy below
-      }
-
-      // ── Fallback: proxy through Vercel → Render ──────────────────────────
-      // Each chunk is ≤ 3 MB so it stays under Vercel's 4.5 MB limit.
-      const CHUNK = 3 * 1024 * 1024;
-      const totalChunks = Math.ceil(file.size / CHUNK);
-      const uploadId = totalChunks > 1 ? crypto.randomUUID() : null;
-
-      for (let i = 0; i < totalChunks; i++) {
-        setStatus(totalChunks > 1
-          ? `Uploading part ${i + 1}/${totalChunks}… (Render may need ~30 s to wake)`
-          : "Uploading via proxy…"
-        );
-
-        const chunk = file.slice(i * CHUNK, (i + 1) * CHUNK);
-        const fd = new FormData();
-        fd.append("file", new File([chunk], file.name, { type: file.type }));
-        fd.append("category", category);
-        fd.append("originalName", file.name);
-        if (uploadId) {
-          fd.append("uploadId", uploadId);
-          fd.append("chunkIndex", String(i));
-          fd.append("totalChunks", String(totalChunks));
-        }
-
-        // Retry on 404/502/503/504 (Render sleeping)
-        let res!: Response;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          res = await fetch("/api/upload", { method: "POST", body: fd });
-          if (![404, 502, 503, 504].includes(res.status)) break;
-          const wait = [10, 12, 14, 16, 18][attempt] * 1000;
-          setStatus(`Server waking up… retry in ${wait / 1000}s (${attempt + 1}/5)`);
-          await new Promise(r => setTimeout(r, wait));
-        }
-
-        const ct = res.headers.get("content-type") ?? "";
-        if (!ct.includes("application/json")) {
-          throw new Error(`HTTP ${res.status} — server returned non-JSON. Check Render logs.`);
-        }
-        const data = await res.json();
-        if (i === totalChunks - 1) {
-          if (!data.url) throw new Error(data.error ?? "No URL in response");
-          onUpload(data.url);
-          setStatus("✓ Uploaded");
-          return;
-        }
-        if (data.error) throw new Error(data.error);
-      }
+      // Single upload path: Vercel Blob (browser → Vercel CDN direct).
+      // No Render, no chunking, no proxying, no size cap.
+      const { upload } = await import("@vercel/blob/client");
+      const result = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+      });
+      onUpload(result.url);
+      setStatus("✓ Uploaded");
     } catch (err) {
       alert(`Upload error: ${err}`);
       setStatus("");
