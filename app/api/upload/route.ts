@@ -12,6 +12,18 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
  * Requires BLOB_READ_WRITE_TOKEN on Vercel (created via the Blob store).
  */
 export async function POST(req: NextRequest) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json(
+      {
+        error:
+          "BLOB_READ_WRITE_TOKEN is not set on Vercel. " +
+          "Vercel Dashboard → your project → Storage → Blob → Create/Connect. " +
+          "After connecting, redeploy so the env var is picked up.",
+      },
+      { status: 500 }
+    );
+  }
+
   try {
     const body = (await req.json()) as HandleUploadBody;
     const response = await handleUpload({

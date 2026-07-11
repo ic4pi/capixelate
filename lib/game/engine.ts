@@ -398,8 +398,19 @@ export class GameEngine {
     lanternLight.position.copy(lanternMesh.position);
     this.playerShip.add(lanternLight);
 
+    // The procedural ship has its bow (pointy end) at +X in local coordinates,
+    // but movement/camera code treats +Z as the ship's forward direction.
+    // Wrap all ship geometry in an inner group rotated -90° so bow faces +Z.
+    const shipModel = new THREE.Group();
+    shipModel.name = "shipModel";
+    while (this.playerShip.children.length > 0) {
+      shipModel.add(this.playerShip.children[0]);
+    }
+    shipModel.rotation.y = -Math.PI / 2;
+    this.playerShip.add(shipModel);
+
     this.playerShip.position.set(0, 0.5, 180); // start in open water, islands are at -Z
-    this.playerShip.rotation.y = Math.PI; // face toward islands at start
+    this.playerShip.rotation.y = Math.PI;      // face toward islands (-Z direction)
     this.scene.add(this.playerShip);
 
     // Initial camera: behind ship at deck height, looking forward toward islands
