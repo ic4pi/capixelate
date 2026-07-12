@@ -1,8 +1,17 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { put, del, head } from "@vercel/blob";
+import { put, del, head, getDownloadUrl } from "@vercel/blob";
 
 export const maxDuration = 60;
+
+/** For private blobs, append download param so the URL is directly usable. */
+function getAccessUrl(blobUrl: string): string {
+  try {
+    return getDownloadUrl(blobUrl);
+  } catch {
+    return blobUrl;
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,13 +36,18 @@ export async function POST(req: NextRequest) {
 
     // ── Single chunk (small file) ─────────────────────────────────────────
     if (!uploadId || totalChunks <= 1) {
-      const blob = await put(baseName, chunkBuf, { access: "public" });
-      return NextResponse.json({ url: blob.url, originalName: baseName });
+      const blob = await put(baseName, chunkBuf, { access: "public" }).catch(() =>
+        put(baseName, chunkBuf, { access: "private" })
+      );
+      const url = blob.url.includes("?") ? blob.url : getAccessUrl(blob.url);
+      return NextResponse.json({ url, originalName: baseName });
     }
 
     // ── Multi-chunk: store each chunk as a temp blob ───────────────────────
     const chunkKey = `_chunks/${uploadId}/${chunkIndex}`;
-    await put(chunkKey, chunkBuf, { access: "public" });
+    await put(chunkKey, chunkBuf, { access: "public" }).catch(() =>
+      put(chunkKey, chunkBuf, { access: "private" })
+    );
 
     // Not the last chunk — acknowledge and wait for more
     if (chunkIndex < totalChunks - 1) {
@@ -56,12 +70,15 @@ export async function POST(req: NextRequest) {
     }
 
     const finalBuf = Buffer.concat(pieces);
-    const blob     = await put(baseName, finalBuf, { access: "public" });
+    const blob     = await put(baseName, finalBuf, { access: "public" }).catch(() =>
+      put(baseName, finalBuf, { access: "private" })
+    );
+    const url = blob.url.includes("?") ? blob.url : getAccessUrl(blob.url);
 
     // Clean up temp chunk blobs (fire-and-forget)
     Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
 
-    return NextResponse.json({ url: blob.url, originalName: baseName });
+    return NextResponse.json({ url, originalName: baseName });
 
   } catch (err) {
     console.error("Upload error:", err);
