@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
+import { head, getDownloadUrl } from "@vercel/blob";
 
 const MIME: Record<string, string> = {
   ".glb":  "model/gltf-binary",
@@ -12,42 +13,32 @@ const MIME: Record<string, string> = {
   ".svg":  "image/svg+xml",
 };
 
-/**
- * Proxy any Vercel Blob URL through the server.
- * Works for both public and private stores since the server
- * has BLOB_READ_WRITE_TOKEN.
- * Usage: /api/blob?u=https://xxx.blob.vercel-storage.com/file.glb
- */
 export async function GET(req: NextRequest) {
   const blobUrl = req.nextUrl.searchParams.get("u");
   if (!blobUrl) return NextResponse.json({ error: "Missing ?u= param" }, { status: 400 });
 
+  const ext         = "." + (blobUrl.split("?")[0].split(".").pop() ?? "bin").toLowerCase();
+  const contentType = MIME[ext] ?? "application/octet-stream";
+
   try {
-    const res = await fetch(blobUrl, {
-      headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN ?? ""}` },
+    // Get blob metadata (confirms it exists and gives us the downloadUrl)
+    const info = await head(blobUrl);
+
+    // downloadUrl works for both public and private blobs when called server-side
+    const downloadUrl = info?.downloadUrl ?? getDownloadUrl(blobUrl);
+    const res = await fetch(downloadUrl);
+
+    if (!res.ok) throw new Error(`Blob responded ${res.status} for ${downloadUrl}`);
+
+    return new NextResponse(res.body, {
+      headers: {
+        "Content-Type":  contentType,
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
+      },
     });
-
-    if (!res.ok) {
-      // Try download URL variant
-      const dlUrl = blobUrl.includes("?") ? blobUrl : blobUrl + "?download=1";
-      const res2  = await fetch(dlUrl);
-      if (!res2.ok) return NextResponse.json({ error: `Blob fetch failed: ${res.status}` }, { status: 500 });
-      return streamBlob(res2, blobUrl);
-    }
-
-    return streamBlob(res, blobUrl);
   } catch (err) {
+    console.error("Blob proxy error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
-}
-
-function streamBlob(res: Response, url: string) {
-  const ext = "." + (url.split("?")[0].split(".").pop() ?? "bin").toLowerCase();
-  return new NextResponse(res.body, {
-    headers: {
-      "Content-Type":  MIME[ext] ?? "application/octet-stream",
-      "Cache-Control": "public, max-age=31536000, immutable",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
 }
