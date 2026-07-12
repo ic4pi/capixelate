@@ -5,7 +5,8 @@ import { prisma } from "@/lib/db";
 export async function GET() {
   const dbUrl = process.env.DATABASE_URL ?? "(not set — using file:./dev.db)";
   const hasTursoToken = !!(process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN);
-  const hasBlobToken  = !!process.env.BLOB_READ_WRITE_TOKEN;
+  const blobToken     = process.env.BLOB_READ_WRITE_TOKEN ?? "";
+  const hasBlobToken  = !!blobToken;
   const hasAdminUser  = !!process.env.ADMIN_USERNAME;
   const hasAdminPass  = !!process.env.ADMIN_PASSWORD;
   const hasNextAuth   = !!process.env.NEXTAUTH_SECRET;
@@ -27,7 +28,9 @@ export async function GET() {
     // — Required for the game to work —
     database_url:            dbUrl.replace(/\/\/[^@]+@/, "//***@"),
     turso_auth_token:        hasTursoToken ? "set ✓" : "NOT SET ✗",
-    blob_read_write_token:   hasBlobToken  ? "set ✓" : "NOT SET ✗  ← causes 'Failed to retrieve client token'",
+    blob_read_write_token:   hasBlobToken
+      ? `set ✓ — starts with: ${blobToken.slice(0, 20)}... (should start with 'vercel_blob_rw_')`
+      : "NOT SET ✗",
     admin_username:          hasAdminUser  ? "set ✓" : "NOT SET ✗",
     admin_password:          hasAdminPass  ? "set ✓" : "NOT SET ✗",
     nextauth_secret:         hasNextAuth   ? "set ✓" : "NOT SET ✗",
