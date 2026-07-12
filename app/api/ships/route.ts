@@ -4,7 +4,10 @@ import { prisma } from "@/lib/db";
 
 export async function GET() {
   try {
-    const ships = await prisma.ship.findMany({ where: { isActive: true } });
+    const ships = await prisma.ship.findMany({
+      where: { isActive: true },
+      orderBy: { updatedAt: "desc" },
+    });
     return NextResponse.json({ ships });
   } catch (err) {
     console.error("GET /api/ships:", err);

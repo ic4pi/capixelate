@@ -785,12 +785,24 @@ export default function AdminDashboard() {
                   ) : (
                     <div className="text-xs text-slate-600 mb-3">Using default procedural model</div>
                   )}
-                  <button
-                    onClick={() => setEditingShip({ ...ship })}
-                    className="w-full py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 transition-all"
-                  >
-                    Edit / Upload Model
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingShip({ ...ship })}
+                      className="flex-1 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 transition-all"
+                    >
+                      Edit / Upload Model
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Delete this ship?")) return;
+                        await fetch(`/api/ships/${ship.id}`, { method: "DELETE" });
+                        loadAll();
+                      }}
+                      className="px-3 py-1.5 text-xs bg-red-900/40 hover:bg-red-700/40 rounded-lg text-red-300 transition-all"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
