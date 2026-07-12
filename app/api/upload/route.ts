@@ -1,12 +1,8 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { put, del, head } from "@vercel/blob";
 
 export const maxDuration = 60;
-
-// In-memory chunk accumulator (lives for the duration of the Vercel function
-// instance — good enough since all chunks come in quick succession).
-const chunkStore = new Map<string, Buffer[]>();
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,35 +23,44 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
     const chunkBuf = Buffer.from(await file.arrayBuffer());
+    const baseName = originalName.replace(/\.gz$/i, "");
 
-    // ── Multi-chunk upload ──────────────────────────────────────────────────
-    if (uploadId && totalChunks > 1) {
-      if (!chunkStore.has(uploadId)) chunkStore.set(uploadId, []);
-      const chunks = chunkStore.get(uploadId)!;
-      chunks[chunkIndex] = chunkBuf;
-
-      // Not the last chunk — just acknowledge
-      if (chunkIndex < totalChunks - 1) {
-        return NextResponse.json({ status: "chunk_received", chunkIndex });
-      }
-
-      // Last chunk — assemble and upload to Blob
-      const finalBuf  = Buffer.concat(chunks);
-      chunkStore.delete(uploadId);
-      const baseName  = originalName.replace(/\.gz$/i, "");
-      const blob      = await put(baseName, finalBuf, {
-        access: "public",
-        contentType: file.type || "application/octet-stream",
-      });
+    // ── Single chunk (small file) ─────────────────────────────────────────
+    if (!uploadId || totalChunks <= 1) {
+      const blob = await put(baseName, chunkBuf, { access: "public" });
       return NextResponse.json({ url: blob.url, originalName: baseName });
     }
 
-    // ── Single chunk (small file) ───────────────────────────────────────────
-    const baseName = originalName.replace(/\.gz$/i, "");
-    const blob     = await put(baseName, chunkBuf, {
-      access: "public",
-      contentType: file.type || "application/octet-stream",
-    });
+    // ── Multi-chunk: store each chunk as a temp blob ───────────────────────
+    const chunkKey = `_chunks/${uploadId}/${chunkIndex}`;
+    await put(chunkKey, chunkBuf, { access: "public" });
+
+    // Not the last chunk — acknowledge and wait for more
+    if (chunkIndex < totalChunks - 1) {
+      return NextResponse.json({ status: "chunk_received", chunkIndex });
+    }
+
+    // Last chunk — fetch all chunks from Blob, assemble, upload final file
+    const pieces: Buffer[] = [];
+    const chunkUrls: string[] = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+      const key = `_chunks/${uploadId}/${i}`;
+      const info = await head(key).catch(() => null);
+      if (!info?.url) {
+        return NextResponse.json({ error: `Missing chunk ${i} — please retry the upload` }, { status: 500 });
+      }
+      const resp = await fetch(info.url);
+      pieces.push(Buffer.from(await resp.arrayBuffer()));
+      chunkUrls.push(info.url);
+    }
+
+    const finalBuf = Buffer.concat(pieces);
+    const blob     = await put(baseName, finalBuf, { access: "public" });
+
+    // Clean up temp chunk blobs (fire-and-forget)
+    Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
+
     return NextResponse.json({ url: blob.url, originalName: baseName });
 
   } catch (err) {
