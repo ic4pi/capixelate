@@ -923,14 +923,18 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
     setStatus("Uploading…");
 
     try {
-      // Single upload path: Vercel Blob (browser → Vercel CDN direct).
-      // No Render, no chunking, no proxying, no size cap.
-      const { upload } = await import("@vercel/blob/client");
-      const result = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/upload",
-      });
-      onUpload(result.url);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("originalName", file.name);
+
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+
+      if (!res.ok || !data.url) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+
+      onUpload(data.url);
       setStatus("✓ Uploaded");
     } catch (err) {
       alert(`Upload error: ${err}`);
