@@ -36,11 +36,11 @@ export async function POST(req: NextRequest) {
 
     // ── Single chunk (small file) ─────────────────────────────────────────
     if (!uploadId || totalChunks <= 1) {
-      const blob = await put(baseName, chunkBuf, { access: "public" }).catch(() =>
-        put(baseName, chunkBuf, { access: "private" })
+      const blobPath = `files/${baseName}`;
+      await put(blobPath, chunkBuf, { access: "public" }).catch(() =>
+        put(blobPath, chunkBuf, { access: "private" })
       );
-      const url = blob.url.includes("?") ? blob.url : getAccessUrl(blob.url);
-      return NextResponse.json({ url, originalName: baseName });
+      return NextResponse.json({ url: `/api/blob/${encodeURIComponent(blobPath)}`, originalName: baseName });
     }
 
     // ── Multi-chunk: store each chunk as a temp blob ───────────────────────
@@ -69,16 +69,16 @@ export async function POST(req: NextRequest) {
       chunkUrls.push(info.url);
     }
 
-    const finalBuf = Buffer.concat(pieces);
-    const blob     = await put(baseName, finalBuf, { access: "public" }).catch(() =>
-      put(baseName, finalBuf, { access: "private" })
+    const finalBuf  = Buffer.concat(pieces);
+    const blobPath  = `files/${baseName}`;
+    await put(blobPath, finalBuf, { access: "public" }).catch(() =>
+      put(blobPath, finalBuf, { access: "private" })
     );
-    const url = blob.url.includes("?") ? blob.url : getAccessUrl(blob.url);
 
     // Clean up temp chunk blobs (fire-and-forget)
     Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
 
-    return NextResponse.json({ url, originalName: baseName });
+    return NextResponse.json({ url: `/api/blob/${encodeURIComponent(blobPath)}`, originalName: baseName });
 
   } catch (err) {
     console.error("Upload error:", err);
