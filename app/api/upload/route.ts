@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { put, del, head, getDownloadUrl } from "@vercel/blob";
+import { v4 as uuidv4 } from "uuid";
 
 export const maxDuration = 60;
 
@@ -32,15 +33,18 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
     const chunkBuf = Buffer.from(await file.arrayBuffer());
-    const baseName = originalName.replace(/\.gz$/i, "");
+    const originalBase = originalName.replace(/\.gz$/i, "");
+    const ext          = originalBase.split(".").pop() ?? "bin";
+    // Use UUID filename to avoid special-char issues in blob paths
+    const safeName     = `${uuidv4()}.${ext}`;
 
     // ── Single chunk (small file) ─────────────────────────────────────────
     if (!uploadId || totalChunks <= 1) {
-      const blobPath = `files/${baseName}`;
-      await put(blobPath, chunkBuf, { access: "public" }).catch(() =>
-        put(blobPath, chunkBuf, { access: "private" })
+      const blob = await put(safeName, chunkBuf, { access: "public" }).catch(() =>
+        put(safeName, chunkBuf, { access: "private" })
       );
-      return NextResponse.json({ url: `/api/blob/${encodeURIComponent(blobPath)}`, originalName: baseName });
+      const proxyUrl = `/api/blob?u=${encodeURIComponent(blob.url)}`;
+      return NextResponse.json({ url: proxyUrl, originalName: originalBase });
     }
 
     // ── Multi-chunk: store each chunk as a temp blob ───────────────────────
@@ -69,16 +73,16 @@ export async function POST(req: NextRequest) {
       chunkUrls.push(info.url);
     }
 
-    const finalBuf  = Buffer.concat(pieces);
-    const blobPath  = `files/${baseName}`;
-    await put(blobPath, finalBuf, { access: "public" }).catch(() =>
-      put(blobPath, finalBuf, { access: "private" })
+    const finalBuf = Buffer.concat(pieces);
+    const blob     = await put(safeName, finalBuf, { access: "public" }).catch(() =>
+      put(safeName, finalBuf, { access: "private" })
     );
 
     // Clean up temp chunk blobs (fire-and-forget)
     Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
 
-    return NextResponse.json({ url: `/api/blob/${encodeURIComponent(blobPath)}`, originalName: baseName });
+    const proxyUrl = `/api/blob?u=${encodeURIComponent(blob.url)}`;
+    return NextResponse.json({ url: proxyUrl, originalName: originalBase });
 
   } catch (err) {
     console.error("Upload error:", err);
