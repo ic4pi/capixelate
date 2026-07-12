@@ -923,19 +923,35 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
     setStatus("Uploading…");
 
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("originalName", file.name);
+      const CHUNK = 3 * 1024 * 1024; // 3 MB — under Vercel's 4.5 MB limit
+      const totalChunks = Math.ceil(file.size / CHUNK);
+      const uploadId = totalChunks > 1 ? crypto.randomUUID() : null;
 
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json();
+      for (let i = 0; i < totalChunks; i++) {
+        if (totalChunks > 1) setStatus(`Uploading part ${i + 1} of ${totalChunks}…`);
 
-      if (!res.ok || !data.url) {
-        throw new Error(data.error ?? `HTTP ${res.status}`);
+        const chunk = file.slice(i * CHUNK, (i + 1) * CHUNK);
+        const fd = new FormData();
+        fd.append("file", new File([chunk], file.name, { type: file.type }));
+        fd.append("originalName", file.name);
+        if (uploadId) {
+          fd.append("uploadId", uploadId);
+          fd.append("chunkIndex", String(i));
+          fd.append("totalChunks", String(totalChunks));
+        }
+
+        const res  = await fetch("/api/upload", { method: "POST", body: fd });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+
+        if (i === totalChunks - 1) {
+          if (!data.url) throw new Error(data.error ?? "No URL returned");
+          onUpload(data.url);
+          setStatus("✓ Uploaded");
+          return;
+        }
       }
-
-      onUpload(data.url);
-      setStatus("✓ Uploaded");
     } catch (err) {
       alert(`Upload error: ${err}`);
       setStatus("");
