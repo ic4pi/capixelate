@@ -8,6 +8,17 @@ export async function POST() {
     await prisma.project.deleteMany();
     await prisma.island.deleteMany();
     await prisma.enemy.deleteMany();
+    await prisma.ship.deleteMany();
+
+    // Player ship — bundled Kenney model (CC0)
+    await prisma.ship.create({
+      data: {
+        name: "The Black Barnacle",
+        type: "player",
+        modelUrl: "/models/ship-pirate-medium.glb",
+        isActive: true,
+      },
+    });
 
     // Islands placed in the -Z direction (the ship's initial heading)
     // Close enough to be visible straight ahead from the start
@@ -86,6 +97,7 @@ export async function POST() {
       data: {
         name: "Corsair Sloop",
         type: "ship",
+        modelUrl: "/models/ship-pirate-small.glb",
         hitPoints: 3,
         cannonAccuracy: 0.45,
         difficulty: "easy",
@@ -107,6 +119,7 @@ export async function POST() {
       data: {
         name: "Dread Galleon",
         type: "ship",
+        modelUrl: "/models/ship-large.glb",
         hitPoints: 6,
         cannonAccuracy: 0.65,
         difficulty: "hard",
@@ -128,6 +141,7 @@ export async function POST() {
       data: {
         name: "Kraken",
         type: "monster",
+        modelUrl: "/models/ship-ghost.glb",
         hitPoints: 10,
         cannonAccuracy: 0.8,
         difficulty: "legendary",
@@ -149,6 +163,7 @@ export async function POST() {
       data: {
         name: "Sea Serpent",
         type: "monster",
+        modelUrl: "/models/ship-ghost.glb",
         hitPoints: 7,
         cannonAccuracy: 0.6,
         difficulty: "hard",

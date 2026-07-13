@@ -16,6 +16,65 @@ import type {
   ProjectileState,
 } from "./types";
 
+// Bundled CC0 3D assets from Kenney's Pirate Kit (public/models/).
+// Used as defaults so the game looks like a pirate game out of the box —
+// no admin upload required. Individual entities can still override these
+// via `modelUrl` in the DB (set through the admin panel or seed).
+const DEFAULT_PLAYER_SHIP_MODEL = "/models/ship-pirate-medium.glb";
+const DEFAULT_ENEMY_SHIP_MODELS = [
+  "/models/ship-medium.glb",
+  "/models/ship-pirate-small.glb",
+  "/models/ship-large.glb",
+];
+const DEFAULT_MONSTER_MODEL = "/models/ship-ghost.glb";
+const ISLAND_PALM_MODELS = [
+  "/models/palm-detailed-straight.glb",
+  "/models/palm-detailed-bend.glb",
+  "/models/palm-straight.glb",
+  "/models/palm-bend.glb",
+];
+const ISLAND_ROCK_MODELS = [
+  "/models/rocks-sand-a.glb",
+  "/models/rocks-sand-b.glb",
+  "/models/rocks-sand-c.glb",
+];
+const ISLAND_LANDMARK_MODELS = [
+  "/models/tower-complete-small.glb",
+  "/models/chest.glb",
+  "/models/barrel.glb",
+];
+
+/**
+ * Pick a sensible default model URL for an enemy. Sea monsters get the
+ * ghost-ship model (translucent, spooky); ships cycle through Kenney's
+ * three ship silhouettes so a fleet looks varied.
+ */
+function defaultEnemyModelUrl(enemy: { type: string; name?: string; id?: string }): string {
+  if (enemy.type === "monster") return DEFAULT_MONSTER_MODEL;
+  const key = (enemy.id ?? enemy.name ?? "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return DEFAULT_ENEMY_SHIP_MODELS[key % DEFAULT_ENEMY_SHIP_MODELS.length];
+}
+
+/** Deterministic PRNG so island decoration doesn't jitter between renders. */
+function mulberry32(seed: number) {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 export class GameEngine {
   scene!: THREE.Scene;
   camera!: THREE.PerspectiveCamera;
@@ -417,20 +476,26 @@ export class GameEngine {
     this.camera.position.set(0, 6, 6);
     this.camera.lookAt(0, 5, -40);
 
-    if (modelUrl) {
-      this.loadGLB(modelUrl)
-        .then((model) => {
-          // Replace all procedural children with the loaded GLB
-          while (this.playerShip.children.length > 0) {
-            this.playerShip.remove(this.playerShip.children[0]);
-          }
-          model.name = "customPlayerShip";
-          this.playerShip.add(model);
-        })
-        .catch((err) => {
-          console.error(`[game] Failed to load player ship model from ${modelUrl}:`, err);
+    // Load the actual pirate ship model (bundled Kenney GLB by default).
+    // If it loads successfully, we swap out the procedural placeholder above.
+    // If the network call fails, the procedural geometry stays visible so the
+    // player still has *something* to sail.
+    const resolvedModelUrl = modelUrl ?? DEFAULT_PLAYER_SHIP_MODEL;
+    this.loadGLB(resolvedModelUrl)
+      .then((model) => {
+        while (this.playerShip.children.length > 0) {
+          this.playerShip.remove(this.playerShip.children[0]);
+        }
+        model.name = "customPlayerShip";
+        model.traverse((obj) => {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
         });
-    }
+        this.playerShip.add(model);
+      })
+      .catch((err) => {
+        console.error(`[game] Failed to load player ship model from ${resolvedModelUrl}:`, err);
+      });
   }
 
   private initGameState(islands: IslandState[], enemies: EnemyState[]) {
@@ -565,29 +630,137 @@ export class GameEngine {
     beach.position.y = -5;
     terrain.add(beach);
 
-    // Ring of trees near the island edge — gives visual depth as you walk inward
-    const treeCount = 18;
-    for (let i = 0; i < treeCount; i++) {
-      const angle = (i / treeCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-      const r = island.scale * (42 + Math.random() * 16);
-      const treeGroup = new THREE.Group();
+    // Palm-tree ring & scattered rocks — start as cheap procedural placeholders
+    // that get swapped for Kenney GLB models once they load (async). Deterministic
+    // per-island layout so trees don't jitter between renders.
+    const rng = mulberry32(hashString(island.id));
+    const decor = new THREE.Group();
+    decor.name = "islandDecor";
+    terrain.add(decor);
 
-      const trunkH = 6 + Math.random() * 4;
-      const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, trunkH, 6);
-      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
-      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    // Placeholder trees (visible until GLB palms finish loading, and fallback
+    // if the GLBs fail entirely).
+    const placeholderTrees: THREE.Group[] = [];
+    const treeCount = 16;
+    const treeSlots: { x: number; z: number; angle: number; modelIdx: number; scale: number }[] = [];
+    for (let i = 0; i < treeCount; i++) {
+      const a = (i / treeCount) * Math.PI * 2 + (rng() - 0.5) * 0.3;
+      const r = island.scale * (44 + rng() * 14);
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      treeSlots.push({
+        x, z,
+        angle: rng() * Math.PI * 2,
+        modelIdx: Math.floor(rng() * ISLAND_PALM_MODELS.length),
+        scale: 1.4 + rng() * 0.7,
+      });
+
+      const treeGroup = new THREE.Group();
+      const trunkH = 6 + rng() * 4;
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.7, trunkH, 6),
+        new THREE.MeshLambertMaterial({ color: 0x5c3a1e }),
+      );
       trunk.position.y = trunkH / 2;
       treeGroup.add(trunk);
-
-      const leavesGeo = new THREE.ConeGeometry(4, 8, 6);
-      const leavesMat = new THREE.MeshLambertMaterial({ color: 0x2d7a1c });
-      const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+      const leaves = new THREE.Mesh(
+        new THREE.ConeGeometry(4, 8, 6),
+        new THREE.MeshLambertMaterial({ color: 0x2d7a1c }),
+      );
       leaves.position.y = trunkH + 4;
       treeGroup.add(leaves);
+      treeGroup.position.set(x, 4, z);
+      treeGroup.rotation.y = rng() * Math.PI;
+      decor.add(treeGroup);
+      placeholderTrees.push(treeGroup);
+    }
 
-      treeGroup.position.set(Math.cos(angle) * r, 4, Math.sin(angle) * r);
-      treeGroup.rotation.y = Math.random() * Math.PI;
-      terrain.add(treeGroup);
+    // Async: load one palm GLB per unique model, then clone it into each slot
+    // and remove the placeholder cone/cylinder trees.
+    const palmCache = new Map<string, Promise<THREE.Group>>();
+    const loadPalm = (url: string) => {
+      if (!palmCache.has(url)) palmCache.set(url, this.loadGLB(url));
+      return palmCache.get(url)!;
+    };
+    Promise.all(
+      treeSlots.map((slot) =>
+        loadPalm(ISLAND_PALM_MODELS[slot.modelIdx]).then((tpl) => ({ slot, tpl })),
+      ),
+    )
+      .then((results) => {
+        for (const p of placeholderTrees) decor.remove(p);
+        for (const { slot, tpl } of results) {
+          const inst = tpl.clone(true);
+          inst.traverse((obj) => {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          });
+          inst.position.set(slot.x, 4, slot.z);
+          inst.rotation.y = slot.angle;
+          inst.scale.setScalar(slot.scale);
+          decor.add(inst);
+        }
+      })
+      .catch((err) => {
+        console.error(`[game] Failed to load palm models for island "${island.name}":`, err);
+      });
+
+    // Scattered rocks along the beach — pure GLB, no placeholder needed
+    // (worst case the beach just doesn't have rocks)
+    const glbCache = new Map<string, Promise<THREE.Group>>();
+    const loadCached = (url: string) => {
+      if (!glbCache.has(url)) glbCache.set(url, this.loadGLB(url));
+      return glbCache.get(url)!;
+    };
+    for (let i = 0; i < 8; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = island.scale * (72 + rng() * 14);
+      const rockUrl = ISLAND_ROCK_MODELS[Math.floor(rng() * ISLAND_ROCK_MODELS.length)];
+      const rx = Math.cos(a) * r;
+      const rz = Math.sin(a) * r;
+      const ry = rng() * Math.PI * 2;
+      const rs = 1.5 + rng() * 1.0;
+      loadCached(rockUrl)
+        .then((tpl) => {
+          const inst = tpl.clone(true);
+          inst.traverse((obj) => {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          });
+          inst.position.set(rx, -3, rz);
+          inst.rotation.y = ry;
+          inst.scale.setScalar(rs);
+          decor.add(inst);
+        })
+        .catch(() => {});
+    }
+
+    // One decorative landmark per island (tower, chest or barrel), placed
+    // deterministically somewhere between the beach and the campfire so it
+    // gives the island a distinct silhouette from a distance.
+    {
+      const landmarkUrl = ISLAND_LANDMARK_MODELS[Math.floor(rng() * ISLAND_LANDMARK_MODELS.length)];
+      const angle = rng() * Math.PI * 2;
+      const dist = island.scale * (18 + rng() * 20);
+      const lx = Math.cos(angle) * dist;
+      const lz = Math.sin(angle) * dist;
+      const lry = rng() * Math.PI * 2;
+      const lscale = landmarkUrl.endsWith("chest.glb") || landmarkUrl.endsWith("barrel.glb")
+        ? 1.4 + rng() * 0.6   // small props stay small
+        : 2.0 + rng() * 0.6;  // towers are bigger
+      loadCached(landmarkUrl)
+        .then((tpl) => {
+          const inst = tpl.clone(true);
+          inst.traverse((obj) => {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          });
+          inst.position.set(lx, 4, lz);
+          inst.rotation.y = lry;
+          inst.scale.setScalar(lscale);
+          decor.add(inst);
+        })
+        .catch(() => {});
     }
 
     return terrain;
@@ -848,18 +1021,36 @@ export class GameEngine {
     this.scene.add(group);
     this.enemies.set(enemy.id, { group, state: enemy });
 
-    if (enemy.modelUrl) {
-      this.loadGLB(enemy.modelUrl)
-        .then((model) => {
-          const existing = group.getObjectByName("body");
-          if (existing) group.remove(existing);
-          model.name = "body";
-          group.add(model);
-        })
-        .catch((err) => {
-          console.error(`[game] Failed to load enemy model "${enemy.name}" from ${enemy.modelUrl}:`, err);
+    const enemyModelUrl = enemy.modelUrl ?? defaultEnemyModelUrl(enemy);
+    this.loadGLB(enemyModelUrl)
+      .then((model) => {
+        const existing = group.getObjectByName("body");
+        if (existing) group.remove(existing);
+        model.name = "body";
+        model.traverse((obj) => {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
         });
-    }
+        // Ghost ships (used for sea monsters) — tint blue-green + translucent
+        if (enemyModelUrl === DEFAULT_MONSTER_MODEL) {
+          model.traverse((obj) => {
+            const mesh = obj as THREE.Mesh;
+            if (mesh.isMesh && mesh.material) {
+              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+              for (const m of mats) {
+                const mat = m as THREE.MeshStandardMaterial;
+                mat.transparent = true;
+                mat.opacity = 0.75;
+                if (mat.color) mat.color.multiplyScalar(0.6).add(new THREE.Color(0x003344));
+              }
+            }
+          });
+        }
+        group.add(model);
+      })
+      .catch((err) => {
+        console.error(`[game] Failed to load enemy model "${enemy.name}" from ${enemyModelUrl}:`, err);
+      });
   }
 
   fireCannonBall(fromPosition: THREE.Vector3, direction: THREE.Vector3, isPlayer: boolean) {
