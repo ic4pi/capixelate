@@ -427,8 +427,8 @@ export class GameEngine {
           model.name = "customPlayerShip";
           this.playerShip.add(model);
         })
-        .catch(() => {
-          // Keep procedural geometry on failure
+        .catch((err) => {
+          console.error(`[game] Failed to load player ship model from ${modelUrl}:`, err);
         });
     }
   }
@@ -636,8 +636,8 @@ export class GameEngine {
           model.scale.setScalar(island.scale);
           group.add(model);
         })
-        .catch(() => {
-          // Procedural terrain stays on failure
+        .catch((err) => {
+          console.error(`[game] Failed to load island model "${island.name}" from ${island.modelUrl}:`, err);
         });
     }
   }
@@ -719,6 +719,7 @@ export class GameEngine {
     // Icon — show project favicon/logo if available, otherwise default sphere
     if (island.projectIconUrl) {
       const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin("anonymous");
       loader.load(
         island.projectIconUrl,
         (texture) => {
@@ -762,8 +763,8 @@ export class GameEngine {
           group.add(icon);
         },
         undefined,
-        () => {
-          // Fallback to default sphere if favicon fails to load
+        (err) => {
+          console.error(`[game] Failed to load portal icon for "${island.name}" from ${island.projectIconUrl}:`, err);
           const sphereMat = new THREE.MeshBasicMaterial({ color: 0x004488, transparent: true, opacity: 0.8 });
           group.add(new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), sphereMat));
         }
@@ -855,8 +856,8 @@ export class GameEngine {
           model.name = "body";
           group.add(model);
         })
-        .catch(() => {
-          // Procedural geometry stays on failure
+        .catch((err) => {
+          console.error(`[game] Failed to load enemy model "${enemy.name}" from ${enemy.modelUrl}:`, err);
         });
     }
   }
