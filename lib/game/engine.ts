@@ -1123,12 +1123,25 @@ export class GameEngine {
 
     } else {
       // ── Mode 0: Deck / Crow's-nest (default) ──────────────────────────────
-      // Camera sits behind the ship at deck height. Procedural sails are
-      // hidden so nothing blocks the forward view.
-      //   z=0 deck:       6 units behind center, 6 units up
-      //   z=1 crow's nest: 14 units behind,     22 units up
-      const camFwd = -6 - 8 * z;
-      const camUp  =  6 + 16 * (z * z);
+      // Deck view:  camera AHEAD of the masts so the sails are BEHIND the
+      //             camera — you see clear ocean with the bow rail below,
+      //             looking at the front of the deck.
+      // Crow's-nest: camera rises high and slides back for a full horizon.
+      //   z=0 deck:   10 units ahead of center, 4 units up
+      //   z=1 crow's: −6 units (behind),       22 units up
+      //
+      // When close to an island the camera pulls back toward the stern so it
+      // doesn't clip through the beach/terrain. Without this guard, the +10
+      // "ahead of ship" deck-cam ends up standing on the island shore.
+      let deckAhead = 10;
+      if (this._nearIslandPos) {
+        const dToIsland = this._nearIslandPos.distanceTo(this.playerShip.position);
+        // Blend from +10 (open water, dist ≥ 150) to −6 (touching shore, dist ≤ 90).
+        const t = THREE.MathUtils.clamp((dToIsland - 90) / 60, 0, 1);
+        deckAhead = -6 + 16 * t;
+      }
+      const camFwd = deckAhead - (deckAhead + 6) * z;
+      const camUp  = 4 + 18 * (z * z);
       camPos = this.playerShip.position.clone().add(new THREE.Vector3(
         fwdX * camFwd, camUp, fwdZ * camFwd
       ));
