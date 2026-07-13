@@ -1,17 +1,27 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { put, del, head, getDownloadUrl } from "@vercel/blob";
+import { put, del, head } from "@vercel/blob";
 import { v4 as uuidv4 } from "uuid";
 
 export const maxDuration = 60;
 
-/** For private blobs, append download param so the URL is directly usable. */
-function getAccessUrl(blobUrl: string): string {
-  try {
-    return getDownloadUrl(blobUrl);
-  } catch {
-    return blobUrl;
-  }
+/**
+ * If the blob was uploaded with `access: "public"` the returned URL is
+ * directly reachable from any browser — no proxy needed. Wrapping every
+ * upload in `/api/blob?u=…` forces the game to route asset loads through
+ * a server proxy that (a) has to hold BLOB_READ_WRITE_TOKEN wherever the
+ * API lives, and (b) has repeatedly broken silently. For public blobs
+ * we hand the client the real URL directly. Only truly private blobs
+ * (fallback path below) need the proxy.
+ */
+function isPublicBlobUrl(url: string): boolean {
+  return /\.public\.blob\.vercel-storage\.com\//i.test(url);
+}
+
+function toClientUrl(blobUrl: string): string {
+  return isPublicBlobUrl(blobUrl)
+    ? blobUrl
+    : `/api/blob?u=${encodeURIComponent(blobUrl)}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -43,8 +53,7 @@ export async function POST(req: NextRequest) {
       const blob = await put(safeName, chunkBuf, { access: "public" }).catch(() =>
         put(safeName, chunkBuf, { access: "private" })
       );
-      const proxyUrl = `/api/blob?u=${encodeURIComponent(blob.url)}`;
-      return NextResponse.json({ url: proxyUrl, originalName: originalBase });
+      return NextResponse.json({ url: toClientUrl(blob.url), originalName: originalBase });
     }
 
     // ── Multi-chunk: store each chunk as a temp blob ───────────────────────
@@ -81,8 +90,7 @@ export async function POST(req: NextRequest) {
     // Clean up temp chunk blobs (fire-and-forget)
     Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
 
-    const proxyUrl = `/api/blob?u=${encodeURIComponent(blob.url)}`;
-    return NextResponse.json({ url: proxyUrl, originalName: originalBase });
+    return NextResponse.json({ url: toClientUrl(blob.url), originalName: originalBase });
 
   } catch (err) {
     console.error("Upload error:", err);
