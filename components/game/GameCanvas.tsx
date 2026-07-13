@@ -5,16 +5,8 @@ import type { GameState, IslandState } from "@/lib/game/types";
 import GameHUD from "./GameHUD";
 import IntroScreen from "./IntroScreen";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-
-function apiUrl(path: string) {
-  return `${API_BASE}${path}`;
-}
-
 function resolveFileUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${API_BASE}${url}`;
+  return url || undefined;
 }
 
 interface ProjectData {
@@ -153,9 +145,9 @@ export default function GameCanvas() {
     const startGame = async () => {
       try {
         const [islandsRes, enemiesRes, shipsRes] = await Promise.all([
-          fetch(apiUrl("/api/islands")),
-          fetch(apiUrl("/api/enemies")),
-          fetch(apiUrl("/api/ships")),
+          fetch("/api/islands"),
+          fetch("/api/enemies"),
+          fetch("/api/ships"),
         ]);
 
         const islandsJson: { islands: IslandData[] } = await islandsRes.json();

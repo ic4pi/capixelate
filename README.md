@@ -46,10 +46,10 @@ The game world spans 2000×2000 units. Islands are placed in the north (negative
 
 - **Next.js 16** (App Router, TypeScript)
 - **Three.js** — custom GLSL shaders for water, WebGL rendering
-- **Prisma 7 + SQLite** via `@prisma/adapter-libsql`
+- **Prisma 7** via `@prisma/adapter-libsql` — SQLite for dev, Turso for prod
 - **Tailwind CSS v4**
 - **JWT authentication** via `jose`
-- **File upload** — local `/public/uploads/` directory
+- **File upload** — [Vercel Blob](https://vercel.com/docs/vercel-blob) (set `BLOB_READ_WRITE_TOKEN`)
 
 ## Getting Started
 
@@ -85,9 +85,14 @@ curl -X POST http://localhost:3000/api/seed
 
 ## Deployment
 
-1. Set `DATABASE_URL` to a persistent SQLite path or a libsql/Turso URL
-2. Set `NEXTAUTH_SECRET` to a strong random string
-3. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD`
-4. Deploy to Vercel, Railway, or any Node.js host
+Deployed on Vercel. Required environment variables:
 
-For production file uploads, configure cloud storage (S3, Cloudflare R2) and replace the upload handler in `app/api/upload/route.ts`.
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Turso/libSQL URL (e.g. `libsql://your-db.turso.io`) |
+| `TURSO_AUTH_TOKEN` | Auth token for the Turso database |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for admin uploads |
+| `NEXTAUTH_SECRET` | Strong random string used to sign admin JWTs |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin login |
+
+After the first deploy, hit `/api/migrate?secret=<NEXTAUTH_SECRET>` once to create the tables.

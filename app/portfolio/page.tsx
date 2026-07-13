@@ -4,8 +4,6 @@ import dynamic from "next/dynamic";
 
 const IslandScene = dynamic(() => import("@/components/game/IslandScene"), { ssr: false });
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-
 interface Project {
   id: string;
   title: string;
@@ -21,7 +19,7 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/projects`)
+    fetch("/api/projects")
       .then((r) => r.json())
       .then((d) => setProjects(d.projects ?? []))
       .catch(() => {})

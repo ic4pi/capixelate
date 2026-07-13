@@ -6,24 +6,18 @@ import { v4 as uuidv4 } from "uuid";
 export const maxDuration = 60;
 
 /**
- * If the blob was uploaded with `access: "public"` the returned URL is
- * directly reachable from any browser — no proxy needed. Wrapping every
- * upload in `/api/blob?u=…` forces the game to route asset loads through
- * a server proxy that (a) has to hold BLOB_READ_WRITE_TOKEN wherever the
- * API lives, and (b) has repeatedly broken silently. For public blobs
- * we hand the client the real URL directly. Only truly private blobs
- * (fallback path below) need the proxy.
+ * Upload handler for the admin panel. Files go to Vercel Blob with public
+ * access, and we return the raw `blob.url` — a CDN-backed URL that the
+ * game can fetch directly with no server-side proxy. That URL is what
+ * gets persisted on `Ship.modelUrl`, `Island.modelUrl`, `Enemy.modelUrl`,
+ * `Project.iconUrl` etc.
+ *
+ * Historical note: earlier revisions wrapped every upload as
+ * `/api/blob?u=<encoded_blob_url>` and proxied every asset request
+ * server-side. That proxy silently failed in production so uploaded
+ * assets never appeared in the game. `/api/blob` still exists to keep
+ * legacy DB rows working — it just 302-redirects to the underlying URL.
  */
-function isPublicBlobUrl(url: string): boolean {
-  return /\.public\.blob\.vercel-storage\.com\//i.test(url);
-}
-
-function toClientUrl(blobUrl: string): string {
-  return isPublicBlobUrl(blobUrl)
-    ? blobUrl
-    : `/api/blob?u=${encodeURIComponent(blobUrl)}`;
-}
-
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
@@ -50,17 +44,13 @@ export async function POST(req: NextRequest) {
 
     // ── Single chunk (small file) ─────────────────────────────────────────
     if (!uploadId || totalChunks <= 1) {
-      const blob = await put(safeName, chunkBuf, { access: "public" }).catch(() =>
-        put(safeName, chunkBuf, { access: "private" })
-      );
-      return NextResponse.json({ url: toClientUrl(blob.url), originalName: originalBase });
+      const blob = await put(safeName, chunkBuf, { access: "public" });
+      return NextResponse.json({ url: blob.url, originalName: originalBase });
     }
 
-    // ── Multi-chunk: store each chunk as a temp blob ───────────────────────
+    // ── Multi-chunk: store each chunk as a temp blob, assemble on last chunk
     const chunkKey = `_chunks/${uploadId}/${chunkIndex}`;
-    await put(chunkKey, chunkBuf, { access: "public" }).catch(() =>
-      put(chunkKey, chunkBuf, { access: "private" })
-    );
+    await put(chunkKey, chunkBuf, { access: "public" });
 
     // Not the last chunk — acknowledge and wait for more
     if (chunkIndex < totalChunks - 1) {
@@ -83,14 +73,12 @@ export async function POST(req: NextRequest) {
     }
 
     const finalBuf = Buffer.concat(pieces);
-    const blob     = await put(safeName, finalBuf, { access: "public" }).catch(() =>
-      put(safeName, finalBuf, { access: "private" })
-    );
+    const blob     = await put(safeName, finalBuf, { access: "public" });
 
     // Clean up temp chunk blobs (fire-and-forget)
     Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
 
-    return NextResponse.json({ url: toClientUrl(blob.url), originalName: originalBase });
+    return NextResponse.json({ url: blob.url, originalName: originalBase });
 
   } catch (err) {
     console.error("Upload error:", err);
