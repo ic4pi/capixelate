@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Uploaded files
 /public/uploads/
+# Uncompressed source models — dropped locally, compressed into public/models/
+/models-source/*
+!/models-source/README.md
