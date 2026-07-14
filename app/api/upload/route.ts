@@ -1,9 +1,42 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { put, del, head } from "@vercel/blob";
+import type { PutBlobResult } from "@vercel/blob";
 import { v4 as uuidv4 } from "uuid";
 
 export const maxDuration = 60;
+
+/**
+ * Try `access: "public"` first (produces a directly-loadable CDN URL),
+ * fall back to `access: "private"` if the store rejects public uploads
+ * (e.g. private-only stores return "access denied for this resource").
+ * Private blobs work in the game via the /api/blob proxy route.
+ */
+async function putWithFallback(name: string, body: Buffer): Promise<PutBlobResult> {
+  try {
+    return await put(name, body, { access: "public" });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Only swap to private for authorization/access-mode errors — real bugs
+    // (network, 500s, quota) should propagate so we don't hide them.
+    if (/access denied|not allowed|forbidden|private/i.test(msg)) {
+      console.warn(`[upload] public put denied, retrying as private: ${msg}`);
+      return await put(name, body, { access: "private" });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Public blobs → return the CDN URL directly (no proxy hop).
+ * Private blobs → wrap in /api/blob?u=… so the browser can fetch through
+ * the server-side proxy that has the token to sign download URLs.
+ */
+function toClientUrl(blobUrl: string): string {
+  return /\.public\.blob\.vercel-storage\.com\//i.test(blobUrl)
+    ? blobUrl
+    : `/api/blob?u=${encodeURIComponent(blobUrl)}`;
+}
 
 /**
  * Upload handler for the admin panel. Files go to Vercel Blob with public
@@ -44,13 +77,13 @@ export async function POST(req: NextRequest) {
 
     // ── Single chunk (small file) ─────────────────────────────────────────
     if (!uploadId || totalChunks <= 1) {
-      const blob = await put(safeName, chunkBuf, { access: "public" });
-      return NextResponse.json({ url: blob.url, originalName: originalBase });
+      const blob = await putWithFallback(safeName, chunkBuf);
+      return NextResponse.json({ url: toClientUrl(blob.url), originalName: originalBase });
     }
 
     // ── Multi-chunk: store each chunk as a temp blob, assemble on last chunk
     const chunkKey = `_chunks/${uploadId}/${chunkIndex}`;
-    await put(chunkKey, chunkBuf, { access: "public" });
+    await putWithFallback(chunkKey, chunkBuf);
 
     // Not the last chunk — acknowledge and wait for more
     if (chunkIndex < totalChunks - 1) {
@@ -73,12 +106,12 @@ export async function POST(req: NextRequest) {
     }
 
     const finalBuf = Buffer.concat(pieces);
-    const blob     = await put(safeName, finalBuf, { access: "public" });
+    const blob     = await putWithFallback(safeName, finalBuf);
 
     // Clean up temp chunk blobs (fire-and-forget)
     Promise.all(chunkUrls.map((u) => del(u))).catch(() => {});
 
-    return NextResponse.json({ url: blob.url, originalName: originalBase });
+    return NextResponse.json({ url: toClientUrl(blob.url), originalName: originalBase });
 
   } catch (err) {
     console.error("Upload error:", err);
