@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import {
   waterVertexShader,
   waterFragmentShader,
@@ -55,6 +57,25 @@ function defaultEnemyModelUrl(enemy: { type: string; name?: string; id?: string 
   return DEFAULT_ENEMY_SHIP_MODELS[key % DEFAULT_ENEMY_SHIP_MODELS.length];
 }
 
+/**
+ * Nudge a freshly-loaded GLB before it's added to the scene. Everything is
+ * optional — an admin who never sets these fields gets the model as-authored.
+ */
+function applyModelTransform(
+  model: THREE.Object3D,
+  t: { scale?: number; rotationY?: number; yOffset?: number },
+) {
+  if (t.scale && t.scale > 0 && t.scale !== 1) {
+    model.scale.multiplyScalar(t.scale);
+  }
+  if (t.rotationY) {
+    model.rotation.y += t.rotationY;
+  }
+  if (t.yOffset) {
+    model.position.y += t.yOffset;
+  }
+}
+
 /** Deterministic PRNG so island decoration doesn't jitter between renders. */
 function mulberry32(seed: number) {
   let t = seed >>> 0;
@@ -101,7 +122,17 @@ export class GameEngine {
   foggyTiles: Set<string> = new Set();
   windIndicator?: THREE.ArrowHelper;
   private frameCount = 0;
-  private gltfLoader = new GLTFLoader();
+  // GLTFLoader configured with DRACO + Meshopt decoders so it can load the
+  // compressed .glb files emitted by `npm run compress-models`. Decoder WASM
+  // is fetched from Google's CDN (no files to bundle in the repo).
+  private gltfLoader = (() => {
+    const loader = new GLTFLoader();
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    loader.setDRACOLoader(draco);
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    return loader;
+  })();
 
   // 0 = close deck view  |  1 = full crow's nest view
   // Controlled by scroll wheel, smoothly interpolated each frame
@@ -491,12 +522,23 @@ export class GameEngine {
           obj.castShadow = true;
           obj.receiveShadow = true;
         });
+        applyModelTransform(model, {
+          scale: this.playerModelScale,
+          rotationY: this.playerModelRotationY,
+          yOffset: this.playerModelYOffset,
+        });
         this.playerShip.add(model);
       })
       .catch((err) => {
         console.error(`[game] Failed to load player ship model from ${resolvedModelUrl}:`, err);
       });
   }
+
+  // Per-entity model-transform overrides set by the admin — nudged onto the
+  // engine before init() runs so the loaded GLB gets the same treatment.
+  playerModelScale = 1;
+  playerModelRotationY = 0;
+  playerModelYOffset = 0;
 
   private initGameState(islands: IslandState[], enemies: EnemyState[]) {
     this.gameState = {
@@ -807,6 +849,11 @@ export class GameEngine {
           if (existing) group.remove(existing);
           model.name = "terrain";
           model.scale.setScalar(island.scale);
+          applyModelTransform(model, {
+            scale: undefined, // island.scale is applied above; multiplier of 1 here
+            rotationY: island.modelRotationY,
+            yOffset: island.modelYOffset,
+          });
           group.add(model);
         })
         .catch((err) => {
@@ -1030,6 +1077,11 @@ export class GameEngine {
         model.traverse((obj) => {
           obj.castShadow = true;
           obj.receiveShadow = true;
+        });
+        applyModelTransform(model, {
+          scale: enemy.modelScale,
+          rotationY: enemy.modelRotationY,
+          yOffset: enemy.modelYOffset,
         });
         // Ghost ships (used for sea monsters) — tint blue-green + translucent
         if (enemyModelUrl === DEFAULT_MONSTER_MODEL) {
