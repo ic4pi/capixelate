@@ -1002,6 +1002,103 @@ function FileUploadField({ label, category, currentUrl, onUpload }: {
   );
 }
 
+interface BundledModel {
+  name: string;
+  url: string;
+  size: number;
+  category: string;
+}
+
+/**
+ * 3D model picker with three ways to set the URL:
+ *   1. Type / paste any HTTPS URL (or /models/foo.glb path) into the text box.
+ *   2. Pick from the dropdown of models already bundled in public/models/.
+ *   3. Upload a new file (goes through Vercel Blob, requires BLOB token).
+ *
+ * The point: (1) and (2) never touch Vercel Blob, so they work whether or
+ * not the Blob store is configured — you can point at bundled models or
+ * any external CDN without dealing with the upload flow at all.
+ */
+function ModelPickerField({
+  label,
+  category,
+  filterCategory,
+  currentUrl,
+  onChange,
+}: {
+  label: string;
+  category: string;                    // storage category for the upload path
+  filterCategory?: string;             // if set, restricts the dropdown to that model category
+  currentUrl?: string;
+  onChange: (url: string) => void;
+}) {
+  const [bundled, setBundled] = useState<BundledModel[]>([]);
+  useEffect(() => {
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then((d) => setBundled(d.models ?? []))
+      .catch(() => setBundled([]));
+  }, []);
+
+  const filtered = filterCategory
+    ? bundled.filter((m) => m.category === filterCategory)
+    : bundled;
+
+  return (
+    <div className="col-span-2 space-y-2">
+      <FormField label={label}>
+        <input
+          className={inputCls}
+          value={currentUrl ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="/models/ship-pirate-medium.glb  or  https://example.com/model.glb"
+        />
+      </FormField>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          className={selectCls}
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onChange(e.target.value);
+          }}
+        >
+          <option value="">— Pick a bundled model —</option>
+          {filtered.length === 0 && bundled.length > 0 && (
+            <option disabled>(no bundled models in category &quot;{filterCategory}&quot;)</option>
+          )}
+          {filtered.map((m) => (
+            <option key={m.url} value={m.url}>
+              {m.name}   ({(m.size / 1024).toFixed(0)} KB)
+            </option>
+          ))}
+        </select>
+        {currentUrl && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-slate-300 text-xs transition-all"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <details className="text-xs">
+        <summary className="cursor-pointer text-slate-500 hover:text-slate-300">
+          Or upload a new file (uses Vercel Blob)
+        </summary>
+        <div className="mt-2 pl-2 border-l-2 border-slate-800">
+          <FileUploadField
+            label=""
+            category={category}
+            currentUrl={undefined}
+            onUpload={onChange}
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function ProjectModal({ project, islands, onChange, onSave, onCancel, uploadFile }: {
   project: Partial<Project>;
   islands: Island[];
@@ -1109,14 +1206,12 @@ function IslandModal({ island, onChange, onSave, onCancel, uploadFile }: {
             <option value="hidden">Hidden</option>
           </select>
         </FormField>
-        <div className="col-span-2">
-          <FileUploadField
-            label="Custom 3D Island Model (.glb/.gltf)"
-            category="models/islands"
-            currentUrl={island.modelUrl}
-            onUpload={(url) => onChange({ ...island, modelUrl: url })}
-          />
-        </div>
+        <ModelPickerField
+          label="3D Island Model"
+          category="models/islands"
+          currentUrl={island.modelUrl}
+          onChange={(url) => onChange({ ...island, modelUrl: url || undefined })}
+        />
         <FormField label="Model Rotation Y (degrees)">
           <input
             type="number"
@@ -1221,14 +1316,13 @@ function EnemyModal({ enemy, onChange, onSave, onCancel, uploadFile }: {
             <input type="number" min="50" max="600" className={inputCls} value={enemy.zoneRadius ?? 200} onChange={(e) => onChange({ ...enemy, zoneRadius: Number(e.target.value) })} />
           </FormField>
         </div>
-        <div className="col-span-2">
-          <FileUploadField
-            label="Custom 3D Model (.glb/.gltf)"
-            category="models/enemies"
-            currentUrl={enemy.modelUrl}
-            onUpload={(url) => onChange({ ...enemy, modelUrl: url })}
-          />
-        </div>
+        <ModelPickerField
+          label="3D Model (ship or monster)"
+          category="models/enemies"
+          filterCategory={enemy.type === "monster" ? undefined : "ship"}
+          currentUrl={enemy.modelUrl}
+          onChange={(url) => onChange({ ...enemy, modelUrl: url || undefined })}
+        />
         <FormField label="Model Scale">
           <input
             type="number"
@@ -1292,18 +1386,18 @@ function ShipModal({ ship, onChange, onSave, onCancel, uploadFile }: {
             <option value="ghost">Ghost Ship</option>
           </select>
         </FormField>
-        <div className="col-span-2">
-          <FileUploadField
-            label="Custom 3D Ship Model (.glb/.gltf)"
-            category="models/ships"
-            currentUrl={ship.modelUrl}
-            onUpload={(url) => onChange({ ...ship, modelUrl: url })}
-          />
-          <p className="text-xs text-slate-500 mt-2">
-            Upload a .glb or .gltf file. The model will automatically replace the procedural ship in-game.
-            Recommended scale: ~10 units long. Forward direction should face +Z axis.
-          </p>
-        </div>
+        <ModelPickerField
+          label="3D Ship Model"
+          category="models/ships"
+          filterCategory="ship"
+          currentUrl={ship.modelUrl}
+          onChange={(url) => onChange({ ...ship, modelUrl: url || undefined })}
+        />
+        <p className="col-span-2 text-xs text-slate-500 -mt-2">
+          Pick a bundled model, paste any HTTPS URL, or upload a new file.
+          Bundled models load from <code>/models/*.glb</code> — no Vercel Blob needed.
+          Recommended scale: ~10 units long, forward direction +Z.
+        </p>
         <FormField label="Model Scale">
           <input
             type="number"
