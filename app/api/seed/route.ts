@@ -184,6 +184,13 @@ export async function POST() {
     return NextResponse.json({ success: true, message: "Database seeded successfully" });
   } catch (err) {
     console.error("Seed error:", err);
-    return NextResponse.json({ error: "Seed failed" }, { status: 500 });
+    // Return the real error text so admins can diagnose without digging
+    // through Vercel function logs. Common causes:
+    //   - tables don't exist yet ("no such table: Ship") → run /api/migrate
+    //   - Prisma client is out of sync with the DB schema (missing column)
+    return NextResponse.json(
+      { error: `Seed failed: ${err instanceof Error ? err.message : String(err)}` },
+      { status: 500 },
+    );
   }
 }
