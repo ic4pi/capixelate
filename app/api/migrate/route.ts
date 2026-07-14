@@ -37,6 +37,8 @@ export async function GET(req: Request) {
       "posZ" REAL NOT NULL DEFAULT 0,
       "scale" REAL NOT NULL DEFAULT 1,
       "modelUrl" TEXT,
+      "modelRotationY" REAL NOT NULL DEFAULT 0,
+      "modelYOffset" REAL NOT NULL DEFAULT 0,
       "isDiscovered" INTEGER NOT NULL DEFAULT 0,
       "isActive" INTEGER NOT NULL DEFAULT 1,
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -47,6 +49,9 @@ export async function GET(req: Request) {
       "name" TEXT NOT NULL,
       "type" TEXT NOT NULL DEFAULT 'ship',
       "modelUrl" TEXT,
+      "modelScale" REAL NOT NULL DEFAULT 1,
+      "modelRotationY" REAL NOT NULL DEFAULT 0,
+      "modelYOffset" REAL NOT NULL DEFAULT 0,
       "lootImageUrl" TEXT,
       "hitPoints" INTEGER NOT NULL DEFAULT 3,
       "cannonAccuracy" REAL NOT NULL DEFAULT 0.5,
@@ -70,6 +75,9 @@ export async function GET(req: Request) {
       "name" TEXT NOT NULL,
       "type" TEXT NOT NULL DEFAULT 'player',
       "modelUrl" TEXT,
+      "modelScale" REAL NOT NULL DEFAULT 1,
+      "modelRotationY" REAL NOT NULL DEFAULT 0,
+      "modelYOffset" REAL NOT NULL DEFAULT 0,
       "isActive" INTEGER NOT NULL DEFAULT 1,
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -86,6 +94,16 @@ export async function GET(req: Request) {
       "value" TEXT NOT NULL,
       "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    // ── Additive column migrations. These error if the column already exists;
+    // the per-statement try/catch below turns that into a benign log message.
+    `ALTER TABLE "Island" ADD COLUMN "modelRotationY" REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Island" ADD COLUMN "modelYOffset" REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Ship" ADD COLUMN "modelScale" REAL NOT NULL DEFAULT 1`,
+    `ALTER TABLE "Ship" ADD COLUMN "modelRotationY" REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Ship" ADD COLUMN "modelYOffset" REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Enemy" ADD COLUMN "modelScale" REAL NOT NULL DEFAULT 1`,
+    `ALTER TABLE "Enemy" ADD COLUMN "modelRotationY" REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Enemy" ADD COLUMN "modelYOffset" REAL NOT NULL DEFAULT 0`,
   ];
 
   const results: string[] = [];
@@ -93,9 +111,20 @@ export async function GET(req: Request) {
     try {
       await prisma.$executeRawUnsafe(sql);
       const name = sql.match(/"(\w+)"/)?.[1] ?? "?";
-      results.push(`${name}: created ✓`);
+      const verb = sql.startsWith("ALTER") ? "altered" : "created";
+      results.push(`${name}: ${verb} ✓`);
     } catch (err) {
-      results.push(`ERROR: ${String(err)}`);
+      // ALTER TABLE ADD COLUMN errors when the column already exists — that's
+      // fine on re-runs; log at debug level instead of ERROR so it doesn't
+      // look like a failure in the response.
+      const msg = String(err);
+      if (sql.startsWith("ALTER") && /duplicate column|already exists/i.test(msg)) {
+        const table = sql.match(/"(\w+)"/)?.[1] ?? "?";
+        const col   = sql.match(/COLUMN "(\w+)"/)?.[1] ?? "?";
+        results.push(`${table}.${col}: already present`);
+      } else {
+        results.push(`ERROR: ${msg}`);
+      }
     }
   }
 

@@ -24,6 +24,9 @@ export interface EnemyState {
   name: string;
   type: "ship" | "monster";
   modelUrl?: string;
+  modelScale?: number;
+  modelRotationY?: number;
+  modelYOffset?: number;
   position: { x: number; z: number };
   rotation: number;
   health: number;
@@ -46,6 +49,8 @@ export interface IslandState {
   id: string;
   name: string;
   modelUrl?: string;
+  modelRotationY?: number;
+  modelYOffset?: number;
   position: { x: number; z: number };
   scale: number;
   projectUrl?: string;

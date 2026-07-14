@@ -17,6 +17,8 @@ export async function PUT(
         posZ: body.posZ,
         scale: body.scale,
         modelUrl: body.modelUrl,
+        modelRotationY: body.modelRotationY,
+        modelYOffset: body.modelYOffset,
         isActive: body.isActive,
       },
     });

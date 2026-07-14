@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
         name: body.name,
         type: body.type ?? "player",
         modelUrl: body.modelUrl,
+        modelScale: body.modelScale ?? 1,
+        modelRotationY: body.modelRotationY ?? 0,
+        modelYOffset: body.modelYOffset ?? 0,
         isActive: true,
       },
     });

@@ -30,6 +30,11 @@ model Island {
   posZ         Float     @default(0)
   scale        Float     @default(1)
   modelUrl     String?
+  // Per-model transform overrides — applied to the loaded GLB before adding
+  // it to the scene, so a custom-uploaded model that's off-axis or wrong-scale
+  // can be nudged without re-exporting from Blender.
+  modelRotationY Float @default(0)
+  modelYOffset   Float @default(0)
   isDiscovered Boolean   @default(false)
   isActive     Boolean   @default(true)
   projects     Project[]
@@ -42,6 +47,9 @@ model Enemy {
   name            String
   type            String   @default("ship")
   modelUrl        String?
+  modelScale      Float    @default(1)
+  modelRotationY  Float    @default(0)
+  modelYOffset    Float    @default(0)
   lootImageUrl    String?
   hitPoints       Int      @default(3)
   cannonAccuracy  Float    @default(0.5)
@@ -62,13 +70,16 @@ model Enemy {
 }
 
 model Ship {
-  id        String   @id @default(cuid())
-  name      String
-  type      String   @default("player")
-  modelUrl  String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  type           String   @default("player")
+  modelUrl       String?
+  modelScale     Float    @default(1)
+  modelRotationY Float    @default(0)
+  modelYOffset   Float    @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model AdminUser {

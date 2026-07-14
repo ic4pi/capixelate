@@ -23,6 +23,8 @@ interface Island {
   posZ: number;
   scale: number;
   modelUrl?: string;
+  modelRotationY?: number;
+  modelYOffset?: number;
   isActive: boolean;
   projects?: Project[];
 }
@@ -32,6 +34,9 @@ interface Enemy {
   name: string;
   type: string;
   modelUrl?: string;
+  modelScale?: number;
+  modelRotationY?: number;
+  modelYOffset?: number;
   lootImageUrl?: string;
   hitPoints: number;
   cannonAccuracy: number;
@@ -54,6 +59,9 @@ interface Ship {
   name: string;
   type: string;
   modelUrl?: string;
+  modelScale?: number;
+  modelRotationY?: number;
+  modelYOffset?: number;
   isActive: boolean;
 }
 
@@ -908,6 +916,16 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 const inputCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500 text-sm";
 const selectCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500 text-sm";
 
+// Model rotation is stored in radians in the DB (that's what three.js takes),
+// but degrees are what a human wants to type. Round-trip helpers keep the
+// stored value canonical while showing a friendly number in the admin.
+function radToDeg(rad?: number): number {
+  return Math.round((rad ?? 0) * (180 / Math.PI));
+}
+function degToRad(deg: number): number {
+  return deg * (Math.PI / 180);
+}
+
 function FileUploadField({ label, category, currentUrl, onUpload }: {
   label: string;
   category: string;
@@ -1099,6 +1117,24 @@ function IslandModal({ island, onChange, onSave, onCancel, uploadFile }: {
             onUpload={(url) => onChange({ ...island, modelUrl: url })}
           />
         </div>
+        <FormField label="Model Rotation Y (degrees)">
+          <input
+            type="number"
+            step="15"
+            className={inputCls}
+            value={radToDeg(island.modelRotationY)}
+            onChange={(e) => onChange({ ...island, modelRotationY: degToRad(Number(e.target.value)) })}
+          />
+        </FormField>
+        <FormField label="Model Y Offset (units)">
+          <input
+            type="number"
+            step="0.5"
+            className={inputCls}
+            value={island.modelYOffset ?? 0}
+            onChange={(e) => onChange({ ...island, modelYOffset: Number(e.target.value) })}
+          />
+        </FormField>
       </div>
     </ModalWrapper>
   );
@@ -1193,6 +1229,34 @@ function EnemyModal({ enemy, onChange, onSave, onCancel, uploadFile }: {
             onUpload={(url) => onChange({ ...enemy, modelUrl: url })}
           />
         </div>
+        <FormField label="Model Scale">
+          <input
+            type="number"
+            step="0.1"
+            min="0.1"
+            className={inputCls}
+            value={enemy.modelScale ?? 1}
+            onChange={(e) => onChange({ ...enemy, modelScale: Number(e.target.value) })}
+          />
+        </FormField>
+        <FormField label="Model Rotation Y (degrees)">
+          <input
+            type="number"
+            step="15"
+            className={inputCls}
+            value={radToDeg(enemy.modelRotationY)}
+            onChange={(e) => onChange({ ...enemy, modelRotationY: degToRad(Number(e.target.value)) })}
+          />
+        </FormField>
+        <FormField label="Model Y Offset (units)">
+          <input
+            type="number"
+            step="0.5"
+            className={inputCls}
+            value={enemy.modelYOffset ?? 0}
+            onChange={(e) => onChange({ ...enemy, modelYOffset: Number(e.target.value) })}
+          />
+        </FormField>
         <div className="col-span-2">
           <FileUploadField
             label="Loot Image (shown when looted)"
@@ -1239,6 +1303,36 @@ function ShipModal({ ship, onChange, onSave, onCancel, uploadFile }: {
             Upload a .glb or .gltf file. The model will automatically replace the procedural ship in-game.
             Recommended scale: ~10 units long. Forward direction should face +Z axis.
           </p>
+        </div>
+        <FormField label="Model Scale">
+          <input
+            type="number"
+            step="0.1"
+            min="0.1"
+            className={inputCls}
+            value={ship.modelScale ?? 1}
+            onChange={(e) => onChange({ ...ship, modelScale: Number(e.target.value) })}
+          />
+        </FormField>
+        <FormField label="Model Rotation Y (degrees)">
+          <input
+            type="number"
+            step="15"
+            className={inputCls}
+            value={radToDeg(ship.modelRotationY)}
+            onChange={(e) => onChange({ ...ship, modelRotationY: degToRad(Number(e.target.value)) })}
+          />
+        </FormField>
+        <div className="col-span-2">
+          <FormField label="Model Y Offset (units)">
+            <input
+              type="number"
+              step="0.5"
+              className={inputCls}
+              value={ship.modelYOffset ?? 0}
+              onChange={(e) => onChange({ ...ship, modelYOffset: Number(e.target.value) })}
+            />
+          </FormField>
         </div>
       </div>
     </ModalWrapper>

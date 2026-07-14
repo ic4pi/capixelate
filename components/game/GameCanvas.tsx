@@ -25,6 +25,8 @@ interface IslandData {
   posZ: number;
   scale: number;
   modelUrl?: string;
+  modelRotationY?: number;
+  modelYOffset?: number;
   projects: ProjectData[];
 }
 
@@ -33,6 +35,9 @@ interface EnemyData {
   name: string;
   type: string;
   modelUrl?: string;
+  modelScale?: number;
+  modelRotationY?: number;
+  modelYOffset?: number;
   hitPoints: number;
   cannonAccuracy: number;
   difficulty: string;
@@ -51,6 +56,9 @@ interface ShipData {
   name: string;
   type: string;
   modelUrl?: string;
+  modelScale?: number;
+  modelRotationY?: number;
+  modelYOffset?: number;
 }
 
 export default function GameCanvas() {
@@ -159,6 +167,8 @@ export default function GameCanvas() {
             id: isl.id,
             name: isl.name,
             modelUrl: resolveFileUrl(isl.modelUrl),
+            modelRotationY: isl.modelRotationY,
+            modelYOffset: isl.modelYOffset,
             position: { x: isl.posX, z: isl.posZ },
             scale: isl.scale,
             projectUrl: isl.projects?.[0]?.url,
@@ -175,6 +185,9 @@ export default function GameCanvas() {
           name: en.name,
           type: en.type as "ship" | "monster",
           modelUrl: resolveFileUrl(en.modelUrl),
+          modelScale: en.modelScale,
+          modelRotationY: en.modelRotationY,
+          modelYOffset: en.modelYOffset,
           position: {
             x: en.zoneX + (Math.random() - 0.5) * en.zoneRadius,
             z: en.zoneZ + (Math.random() - 0.5) * en.zoneRadius,
@@ -203,6 +216,9 @@ export default function GameCanvas() {
           setHudState((prev) => ({ ...prev, ...state }));
         engine.onIslandProximity = handleIslandProximity;
         engine.onIslandModeChange = (active) => setOnIsland(active);
+        engine.playerModelScale = playerShip?.modelScale ?? 1;
+        engine.playerModelRotationY = playerShip?.modelRotationY ?? 0;
+        engine.playerModelYOffset = playerShip?.modelYOffset ?? 0;
         engineRef.current = engine;
 
         await engine.init(islandsData, enemiesData, playerShipModelUrl);

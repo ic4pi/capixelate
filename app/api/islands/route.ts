@@ -26,6 +26,8 @@ export async function POST(req: NextRequest) {
         posZ: body.posZ ?? 0,
         scale: body.scale ?? 1,
         modelUrl: body.modelUrl,
+        modelRotationY: body.modelRotationY ?? 0,
+        modelYOffset: body.modelYOffset ?? 0,
         isActive: true,
       },
     });
