@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ islands });
   } catch (err) {
     console.error("GET /api/islands:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -34,6 +34,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ island });
   } catch (err) {
     console.error("POST /api/islands:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

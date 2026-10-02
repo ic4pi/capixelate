@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ ships });
   } catch (err) {
     console.error("GET /api/ships:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -32,6 +32,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ship });
   } catch (err) {
     console.error("POST /api/ships:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

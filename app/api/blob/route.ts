@@ -30,9 +30,19 @@ export async function GET(req: NextRequest) {
   const blobUrl = req.nextUrl.searchParams.get("u");
   if (!blobUrl) return NextResponse.json({ error: "Missing ?u= param" }, { status: 400 });
 
+  // Only Vercel Blob hosts are allowed — this route must not redirect to or
+  // fetch arbitrary URLs.
+  let parsed: URL;
+  try { parsed = new URL(blobUrl); } catch {
+    return NextResponse.json({ error: "Invalid ?u= param" }, { status: 400 });
+  }
+  if (parsed.protocol !== "https:" || !/\.blob\.vercel-storage\.com$/i.test(parsed.hostname)) {
+    return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
+  }
+
   // Public blobs: hand the browser the direct URL. Faster + no token needed.
-  if (/\.public\.blob\.vercel-storage\.com\//i.test(blobUrl)) {
-    return NextResponse.redirect(blobUrl, 302);
+  if (/\.public\.blob\.vercel-storage\.com$/i.test(parsed.hostname)) {
+    return NextResponse.redirect(parsed.toString(), 302);
   }
 
   const ext         = "." + (blobUrl.split("?")[0].split(".").pop() ?? "bin").toLowerCase();
@@ -44,7 +54,7 @@ export async function GET(req: NextRequest) {
     const downloadUrl = info?.downloadUrl ?? getDownloadUrl(blobUrl);
     const res = await fetch(downloadUrl);
 
-    if (!res.ok) throw new Error(`Blob responded ${res.status} for ${downloadUrl}`);
+    if (!res.ok) throw new Error(`Blob responded ${res.status}`);
 
     return new NextResponse(res.body, {
       headers: {
@@ -55,6 +65,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("Blob proxy error for", blobUrl, err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

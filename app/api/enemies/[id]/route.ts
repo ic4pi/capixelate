@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { pickFields } from "@/lib/pick";
 
 export async function PUT(
   req: NextRequest,
@@ -11,29 +12,29 @@ export async function PUT(
     const body = await req.json();
     const enemy = await prisma.enemy.update({
       where: { id },
-      data: {
-        name: body.name,
-        type: body.type,
-        modelUrl: body.modelUrl,
-        modelScale: body.modelScale,
-        modelRotationY: body.modelRotationY,
-        modelYOffset: body.modelYOffset,
-        lootImageUrl: body.lootImageUrl,
-        hitPoints: body.hitPoints,
-        cannonAccuracy: body.cannonAccuracy,
-        difficulty: body.difficulty,
-        behavior: body.behavior,
-        attackMode: body.attackMode,
-        fleeThreshold: body.fleeThreshold,
-        lootValue: body.lootValue,
-        lootDifficulty: body.lootDifficulty,
-        zoneX: body.zoneX,
-        zoneZ: body.zoneZ,
-        zoneRadius: body.zoneRadius,
-        speed: body.speed,
-        spawnCount: body.spawnCount,
-        isActive: body.isActive,
-      },
+      data: pickFields(body, {
+        name: "string",
+        type: "string",
+        modelUrl: "string?",
+        modelScale: "number",
+        modelRotationY: "number",
+        modelYOffset: "number",
+        lootImageUrl: "string?",
+        hitPoints: "number",
+        cannonAccuracy: "number",
+        difficulty: "string",
+        behavior: "string",
+        attackMode: "string",
+        fleeThreshold: "number",
+        lootValue: "number",
+        lootDifficulty: "string",
+        zoneX: "number",
+        zoneZ: "number",
+        zoneRadius: "number",
+        speed: "number",
+        spawnCount: "number",
+        isActive: "boolean",
+      }),
     });
     return NextResponse.json({ enemy });
   } catch {

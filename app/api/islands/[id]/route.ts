@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { pickFields } from "@/lib/pick";
 
 export async function PUT(
   req: NextRequest,
@@ -11,16 +12,16 @@ export async function PUT(
     const body = await req.json();
     const island = await prisma.island.update({
       where: { id },
-      data: {
-        name: body.name,
-        posX: body.posX,
-        posZ: body.posZ,
-        scale: body.scale,
-        modelUrl: body.modelUrl,
-        modelRotationY: body.modelRotationY,
-        modelYOffset: body.modelYOffset,
-        isActive: body.isActive,
-      },
+      data: pickFields(body, {
+        name: "string",
+        posX: "number",
+        posZ: "number",
+        scale: "number",
+        modelUrl: "string?",
+        modelRotationY: "number",
+        modelYOffset: "number",
+        isActive: "boolean",
+      }),
     });
     return NextResponse.json({ island });
   } catch {

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { pickFields } from "@/lib/pick";
 
 export async function DELETE(
   _req: NextRequest,
@@ -8,10 +9,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.ship.delete({ where: { id } });
+    await prisma.ship.update({ where: { id }, data: { isActive: false } });
     return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("DELETE /api/ships/[id]:", err);
+    return NextResponse.json({ error: "Failed to delete ship" }, { status: 500 });
   }
 }
 
@@ -24,15 +26,15 @@ export async function PUT(
     const body = await req.json();
     const ship = await prisma.ship.update({
       where: { id },
-      data: {
-        name: body.name,
-        type: body.type,
-        modelUrl: body.modelUrl,
-        modelScale: body.modelScale,
-        modelRotationY: body.modelRotationY,
-        modelYOffset: body.modelYOffset,
-        isActive: body.isActive,
-      },
+      data: pickFields(body, {
+        name: "string",
+        type: "string",
+        modelUrl: "string?",
+        modelScale: "number",
+        modelRotationY: "number",
+        modelYOffset: "number",
+        isActive: "boolean",
+      }),
     });
     return NextResponse.json({ ship });
   } catch {

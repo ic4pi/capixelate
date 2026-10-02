@@ -46,6 +46,7 @@ export async function GET(
       },
     });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("Blob proxy error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

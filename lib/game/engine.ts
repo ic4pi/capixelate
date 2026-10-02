@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import {
   waterVertexShader,
@@ -116,7 +117,18 @@ export class GameEngine {
   projectileMeshes: Map<string, THREE.Mesh> = new Map();
   stars!: THREE.Points;
   moonLight!: THREE.DirectionalLight;
-  islands: Map<string, { group: THREE.Group; state: IslandState }> = new Map();
+  islands: Map<
+    string,
+    {
+      group: THREE.Group;
+      state: IslandState;
+      /** Collision footprint (world XZ). Procedural fallback until the GLB loads. */
+      center: THREE.Vector2;
+      radius: number;
+      /** Loaded terrain model, used for ground-height raycasts when walking. */
+      terrain?: THREE.Object3D;
+    }
+  > = new Map();
   campfires: Map<string, { particles: THREE.Points; time: number }> = new Map();
   cannonBalls: THREE.Mesh[] = [];
   explosionParticles: THREE.Points[] = [];
@@ -154,7 +166,21 @@ export class GameEngine {
   private islandWalkCenter = new THREE.Vector3();
   private islandWalkAngle = 0;   // orbit angle around island center (radians)
   private islandWalkRadius = 50; // distance from island center (units)
-  private readonly ISLAND_SURFACE_Y = 4.5; // top of island terrain
+  private readonly ISLAND_SURFACE_Y = 4.5; // fallback surface height (procedural island)
+  private islandWalkRec: { center: THREE.Vector2; radius: number; terrain?: THREE.Object3D } | null = null;
+  private groundRaycaster = new THREE.Raycaster();
+  private groundRayOrigin = new THREE.Vector3();
+  private groundRayDir = new THREE.Vector3(0, -1, 0);
+
+  /** Terrain height at world (x,z) for the walked island, or `fallback` when unavailable. */
+  private islandGroundY(x: number, z: number, fallback: number): number {
+    const terrain = this.islandWalkRec?.terrain;
+    if (!terrain) return fallback;
+    this.groundRayOrigin.set(x, 500, z);
+    this.groundRaycaster.set(this.groundRayOrigin, this.groundRayDir);
+    const hit = this.groundRaycaster.intersectObject(terrain, true)[0];
+    return hit ? hit.point.y : fallback;
+  }
 
   /** Called when player changes between sailing and on-island walking. */
   onIslandModeChange?: (active: boolean) => void;
@@ -163,10 +189,20 @@ export class GameEngine {
     this.canvas = canvas;
   }
 
+  /** One fetch+parse per URL; every caller gets its own clone. */
+  private glbCache = new Map<string, Promise<THREE.Group>>();
+
   private loadGLB(url: string): Promise<THREE.Group> {
-    return new Promise((resolve, reject) => {
-      this.gltfLoader.load(url, (gltf) => resolve(gltf.scene), undefined, reject);
-    });
+    let tpl = this.glbCache.get(url);
+    if (!tpl) {
+      tpl = new Promise<THREE.Group>((resolve, reject) => {
+        this.gltfLoader.load(url, (gltf) => resolve(gltf.scene), undefined, reject);
+      });
+      // Don't cache failures — allow a retry on the next request.
+      tpl.catch(() => this.glbCache.delete(url));
+      this.glbCache.set(url, tpl);
+    }
+    return tpl.then((t) => cloneSkinned(t) as THREE.Group);
   }
 
   async init(
@@ -841,7 +877,14 @@ export class GameEngine {
 
     group.position.set(island.position.x, 0, island.position.z);
     this.scene.add(group);
-    this.islands.set(island.id, { group, state: island });
+    const rec = {
+      group,
+      state: island,
+      center: new THREE.Vector2(island.position.x, island.position.z),
+      radius: island.scale * 80,
+      terrain: undefined as THREE.Object3D | undefined,
+    };
+    this.islands.set(island.id, rec);
 
     const islandModelUrl = island.modelUrl || DEFAULT_ISLAND_MODEL;
     {
@@ -857,6 +900,16 @@ export class GameEngine {
             yOffset: island.modelYOffset,
           });
           group.add(model);
+          // Derive collision footprint + walk surface from the real model.
+          group.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(model);
+          if (!box.isEmpty()) {
+            const size = box.getSize(new THREE.Vector3());
+            const c = box.getCenter(new THREE.Vector3());
+            rec.center.set(c.x, c.z);
+            rec.radius = (Math.min(size.x, size.z) / 2) * 0.9;
+            rec.terrain = model;
+          }
         })
         .catch((err) => {
           console.error(`[game] Failed to load island model "${island.name}" from ${islandModelUrl}:`, err);
@@ -1090,6 +1143,9 @@ export class GameEngine {
           model.traverse((obj) => {
             const mesh = obj as THREE.Mesh;
             if (mesh.isMesh && mesh.material) {
+              mesh.material = Array.isArray(mesh.material)
+                ? mesh.material.map((m) => m.clone())
+                : mesh.material.clone();
               const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
               for (const m of mats) {
                 const mat = m as THREE.MeshStandardMaterial;
@@ -1193,21 +1249,32 @@ export class GameEngine {
     this.gameState.gamePhase = "docked";
     this.stopMovement();
 
+    // Find the island being docked at; use its measured footprint
+    let rec: { center: THREE.Vector2; radius: number; terrain?: THREE.Object3D } | null = null;
+    this.islands.forEach((r) => {
+      if (
+        Math.abs(r.state.position.x - this._nearIslandPos!.x) < 1 &&
+        Math.abs(r.state.position.z - this._nearIslandPos!.z) < 1
+      ) rec = r;
+    });
+    this.islandWalkRec = rec;
+    const walkCenter = rec
+      ? (rec as { center: THREE.Vector2 }).center
+      : new THREE.Vector2(this._nearIslandPos.x, this._nearIslandPos.z);
+    const walkMax = rec ? (rec as { radius: number }).radius : 80;
+
     // Island center on its surface
     this.islandWalkCenter.set(
-      this._nearIslandPos.x,
-      this.ISLAND_SURFACE_Y,
-      this._nearIslandPos.z
+      walkCenter.x,
+      this.islandGroundY(walkCenter.x, walkCenter.y, this.ISLAND_SURFACE_Y),
+      walkCenter.y
     );
 
     // Start at the ship's current position around the island
-    const dx = this._nearIslandPos.x - this.playerShip.position.x;
-    const dz = this._nearIslandPos.z - this.playerShip.position.z;
+    const dx = walkCenter.x - this.playerShip.position.x;
+    const dz = walkCenter.y - this.playerShip.position.z;
     this.islandWalkAngle = Math.atan2(dx, dz) + Math.PI; // face toward center
-    this.islandWalkRadius = Math.min(
-      Math.sqrt(dx * dx + dz * dz),
-      80 // cap at beach edge
-    );
+    this.islandWalkRadius = Math.min(Math.sqrt(dx * dx + dz * dz), walkMax * 0.95);
 
     if (this.onIslandModeChange) this.onIslandModeChange(true);
   }
@@ -1268,6 +1335,20 @@ export class GameEngine {
     this.playerShip.position.x += moveX;
     this.playerShip.position.z += moveZ;
 
+    // Island collision — push the hull out of any island footprint
+    if (!this.islandWalkMode) {
+      this.islands.forEach(({ center, radius }) => {
+        const ox = this.playerShip.position.x - center.x;
+        const oz = this.playerShip.position.z - center.y;
+        const d = Math.hypot(ox, oz);
+        if (d < radius && d > 1e-4) {
+          this.playerShip.position.x = center.x + (ox / d) * radius;
+          this.playerShip.position.z = center.y + (oz / d) * radius;
+          gs.playerSpeed *= 0.5;
+        }
+      });
+    }
+
     gs.playerPosition = {
       x: this.playerShip.position.x,
       z: this.playerShip.position.z,
@@ -1312,14 +1393,23 @@ export class GameEngine {
       if (input.forward) this.islandWalkRadius = Math.max(4, this.islandWalkRadius - approachSpd * delta);
       if (input.backward) {
         this.islandWalkRadius += approachSpd * delta;
-        if (this.islandWalkRadius > 92) { this.leaveIsland(); return; } // walk back to ship
+        const exitR = this.islandWalkRec?.radius ?? 92;
+        if (this.islandWalkRadius > exitR) { this.leaveIsland(); return; } // walk back to ship
       }
 
       // Camera sits behind the walker and looks at the campfire/portal
       const camDist = this.islandWalkRadius + 14;
       const camX = this.islandWalkCenter.x + Math.sin(this.islandWalkAngle) * camDist;
       const camZ = this.islandWalkCenter.z + Math.cos(this.islandWalkAngle) * camDist;
-      this.camera.position.lerp(new THREE.Vector3(camX, this.islandWalkCenter.y + 5, camZ), 0.1);
+      // Keep the camera above the terrain under it and under the walker
+      const walkerX = this.islandWalkCenter.x + Math.sin(this.islandWalkAngle) * this.islandWalkRadius;
+      const walkerZ = this.islandWalkCenter.z + Math.cos(this.islandWalkAngle) * this.islandWalkRadius;
+      const base = this.islandWalkCenter.y;
+      const camGround = Math.max(
+        this.islandGroundY(camX, camZ, base),
+        this.islandGroundY(walkerX, walkerZ, base),
+      );
+      this.camera.position.lerp(new THREE.Vector3(camX, camGround + 5, camZ), 0.1);
       this.camera.lookAt(this.islandWalkCenter.x, this.islandWalkCenter.y + 6, this.islandWalkCenter.z);
       return; // skip ship camera code
     }
@@ -1699,7 +1789,9 @@ export class GameEngine {
       const dx = state.position.x - this.playerShip.position.x;
       const dz = state.position.z - this.playerShip.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < 110) {
+      const rec = this.islands.get(state.id);
+      const dockRange = Math.max(110, (rec?.radius ?? 0) + 40);
+      if (dist < dockRange) {
         // Auto-stop the auto-sail when we've arrived at the beach
         if (this.inputState.sailToIsland) {
           this.inputState.sailToIsland = false;

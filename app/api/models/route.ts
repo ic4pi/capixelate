@@ -44,6 +44,6 @@ export async function GET() {
     return NextResponse.json({ models });
   } catch (err) {
     console.error("GET /api/models:", err);
-    return NextResponse.json({ error: String(err), models: [] }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error", models: [] }, { status: 500 });
   }
 }
