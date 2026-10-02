@@ -63,12 +63,13 @@ npm run dev
 Visit `http://localhost:3000` for the game.
 Visit `http://localhost:3000/admin` for the dashboard.
 
-**Default admin credentials:**
-- Username: `admin`
-- Password: `capixelate2024`
-
-Change these via environment variables:
+**Admin credentials:** set these env vars (required in production — there are no defaults):
 ```env
+ADMIN_USERNAME=yourusername
+ADMIN_PASSWORD=a-strong-password
+NEXTAUTH_SECRET=16+ random chars (openssl rand -base64 32)
+```
+In `npm run dev` only, `admin` / `admin` works if these are unset.env
 ADMIN_USERNAME=yourusername
 ADMIN_PASSWORD=yourpassword
 NEXTAUTH_SECRET=your-secret-key

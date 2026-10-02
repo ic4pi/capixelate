@@ -1,43 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { SignJWT, jwtVerify } from "jose";
-
-const SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET ?? "capixelate-secret-key"
-);
+import {
+  ADMIN_COOKIE,
+  clearLoginFails,
+  getEnvAdmin,
+  isAdmin,
+  loginThrottled,
+  recordLoginFail,
+  safeEqual,
+  signAdminToken,
+} from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password } = await req.json();
-
-    // Check env credentials first (quick admin)
-    const envUser = process.env.ADMIN_USERNAME ?? "admin";
-    const envPass = process.env.ADMIN_PASSWORD ?? "capixelate2024";
-
-    let valid = false;
-    if (username === envUser && password === envPass) {
-      valid = true;
-    } else {
-      // Check DB users
-      const user = await prisma.adminUser.findUnique({ where: { username } });
-      if (user) {
-        valid = await bcrypt.compare(password, user.passwordHash);
-      }
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+    if (loginThrottled(ip)) {
+      return NextResponse.json({ error: "Too many attempts, try again later" }, { status: 429 });
     }
 
-    if (!valid) {
+    const { username, password } = await req.json();
+    if (typeof username !== "string" || typeof password !== "string") {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const token = await new SignJWT({ username, role: "admin" })
-      .setProtectedHeader({ alg: "HS256" })
-      .setExpirationTime("24h")
-      .setIssuedAt()
-      .sign(SECRET);
+    let valid = false;
+    const env = getEnvAdmin();
+    if (env && safeEqual(username, env.username) && safeEqual(password, env.password)) {
+      valid = true;
+    } else {
+      const user = await prisma.adminUser.findUnique({ where: { username } });
+      if (user) valid = await bcrypt.compare(password, user.passwordHash);
+    }
 
-    const response = NextResponse.json({ success: true, token });
-    response.cookies.set("capixelate_admin", token, {
+    if (!valid) {
+      recordLoginFail(ip);
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    const token = await signAdminToken(username);
+    if (!token) {
+      return NextResponse.json({ error: "Server auth is not configured" }, { status: 500 });
+    }
+    clearLoginFails(ip);
+
+    const response = NextResponse.json({ success: true });
+    response.cookies.set(ADMIN_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -51,19 +59,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    const token = req.cookies.get("capixelate_admin")?.value;
-    if (!token) return NextResponse.json({ authenticated: false });
-
-    await jwtVerify(token, SECRET);
-    return NextResponse.json({ authenticated: true });
-  } catch {
-    return NextResponse.json({ authenticated: false });
-  }
+  return NextResponse.json({ authenticated: await isAdmin(req) });
 }
 
 export async function DELETE() {
   const response = NextResponse.json({ success: true });
-  response.cookies.delete("capixelate_admin");
+  response.cookies.delete(ADMIN_COOKIE);
   return response;
 }

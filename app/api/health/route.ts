@@ -1,8 +1,9 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const dbUrl = process.env.DATABASE_URL ?? "(not set — using file:./dev.db)";
   const hasTursoToken = !!(process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN);
   const blobToken     = process.env.BLOB_READ_WRITE_TOKEN ?? "";
@@ -12,11 +13,18 @@ export async function GET() {
   const hasNextAuth   = !!process.env.NEXTAUTH_SECRET;
 
   let dbStatus = "unknown";
+  let dbOk = false;
   try {
     await prisma.$queryRaw`SELECT 1`;
     dbStatus = "connected ✓";
+    dbOk = true;
   } catch (err) {
     dbStatus = `ERROR: ${String(err)}`;
+  }
+
+  // Unauthenticated callers only learn up/down — no config details.
+  if (!(await isAdmin(req))) {
+    return NextResponse.json({ ok: dbOk }, { status: dbOk ? 200 : 503 });
   }
 
   // List all env vars containing BLOB so we can spot a renamed/prefixed token
@@ -29,7 +37,7 @@ export async function GET() {
     database_url:            dbUrl.replace(/\/\/[^@]+@/, "//***@"),
     turso_auth_token:        hasTursoToken ? "set ✓" : "NOT SET ✗",
     blob_read_write_token:   hasBlobToken
-      ? `set ✓ — starts with: ${blobToken.slice(0, 20)}... (should start with 'vercel_blob_rw_')`
+      ? `set ✓${blobToken.startsWith("vercel_blob_rw_") ? "" : " (unexpected prefix — should start with 'vercel_blob_rw_')"}`
       : "NOT SET ✗",
     admin_username:          hasAdminUser  ? "set ✓" : "NOT SET ✗",
     admin_password:          hasAdminPass  ? "set ✓" : "NOT SET ✗",

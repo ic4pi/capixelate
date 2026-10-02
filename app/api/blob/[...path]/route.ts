@@ -46,6 +46,6 @@ export async function GET(
       },
     });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Blob fetch failed" }, { status: 500 });
   }
 }

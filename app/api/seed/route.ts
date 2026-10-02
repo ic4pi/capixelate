@@ -1,8 +1,11 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
   try {
     // Clear existing
     await prisma.project.deleteMany();

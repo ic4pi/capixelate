@@ -1,19 +1,16 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 /**
  * Creates all missing tables by running raw SQL directly through the
  * existing Prisma connection — no npx, no filesystem, works on Vercel.
- * Visit /api/migrate?secret=YOUR_NEXTAUTH_SECRET once.
+ * Requires an admin session (log in at /admin first), then visit /api/migrate once.
  */
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const secret = searchParams.get("secret");
-
-  if (secret !== process.env.NEXTAUTH_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(req: NextRequest) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
 
   const statements = [
     `CREATE TABLE IF NOT EXISTS "Project" (

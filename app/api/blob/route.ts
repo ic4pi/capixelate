@@ -30,6 +30,17 @@ export async function GET(req: NextRequest) {
   const blobUrl = req.nextUrl.searchParams.get("u");
   if (!blobUrl) return NextResponse.json({ error: "Missing ?u= param" }, { status: 400 });
 
+  // Only ever proxy/redirect to our own Vercel Blob store (no open redirect / SSRF).
+  let parsed: URL;
+  try {
+    parsed = new URL(blobUrl);
+  } catch {
+    return NextResponse.json({ error: "Invalid url" }, { status: 400 });
+  }
+  if (parsed.protocol !== "https:" || !/\.blob\.vercel-storage\.com$/i.test(parsed.hostname)) {
+    return NextResponse.json({ error: "Forbidden host" }, { status: 400 });
+  }
+
   // Public blobs: hand the browser the direct URL. Faster + no token needed.
   if (/\.public\.blob\.vercel-storage\.com\//i.test(blobUrl)) {
     return NextResponse.redirect(blobUrl, 302);
@@ -55,6 +66,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("Blob proxy error for", blobUrl, err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Blob fetch failed" }, { status: 500 });
   }
 }

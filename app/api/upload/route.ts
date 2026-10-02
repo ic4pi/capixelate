@@ -1,10 +1,15 @@
 export const dynamic = "force-dynamic";
+import { requireAdmin } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { put, del, head } from "@vercel/blob";
 import type { PutBlobResult } from "@vercel/blob";
 import { v4 as uuidv4 } from "uuid";
 
 export const maxDuration = 60;
+
+const ALLOWED_EXT = new Set(["glb", "gltf", "png", "jpg", "jpeg", "webp", "gif"]);
+const MAX_CHUNK_BYTES = 4 * 1024 * 1024; // client sends 3 MB chunks
+const MAX_CHUNKS = 40;                   // ~120 MB total cap
 
 /**
  * Try `access: "public"` first (produces a directly-loadable CDN URL),
@@ -52,6 +57,8 @@ function toClientUrl(blobUrl: string): string {
  * legacy DB rows working — it just 302-redirects to the underlying URL.
  */
 export async function POST(req: NextRequest) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
   try {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return NextResponse.json(
@@ -69,9 +76,23 @@ export async function POST(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
+    if (file.size > MAX_CHUNK_BYTES) {
+      return NextResponse.json({ error: "Chunk too large" }, { status: 413 });
+    }
+    if (!Number.isInteger(chunkIndex) || !Number.isInteger(totalChunks) ||
+        totalChunks < 1 || totalChunks > MAX_CHUNKS || chunkIndex < 0 || chunkIndex >= totalChunks) {
+      return NextResponse.json({ error: "Invalid chunk parameters" }, { status: 400 });
+    }
+    if (uploadId && !/^[A-Za-z0-9_-]{8,64}$/.test(uploadId)) {
+      return NextResponse.json({ error: "Invalid uploadId" }, { status: 400 });
+    }
+
     const chunkBuf = Buffer.from(await file.arrayBuffer());
     const originalBase = originalName.replace(/\.gz$/i, "");
-    const ext          = originalBase.split(".").pop() ?? "bin";
+    const ext          = (originalBase.split(".").pop() ?? "").toLowerCase();
+    if (!ALLOWED_EXT.has(ext)) {
+      return NextResponse.json({ error: `File type .${ext} not allowed` }, { status: 400 });
+    }
     // Use UUID filename to avoid special-char issues in blob paths
     const safeName     = `${uuidv4()}.${ext}`;
 
@@ -115,6 +136,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     console.error("Upload error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
 }
