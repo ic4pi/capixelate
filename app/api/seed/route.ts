@@ -15,7 +15,7 @@ export async function POST() {
       data: {
         name: "The Black Barnacle",
         type: "player",
-        modelUrl: "/models/ship-pirate-medium.glb",
+        modelUrl: "/models/early-ship.glb",
         isActive: true,
       },
     });
@@ -28,6 +28,7 @@ export async function POST() {
         posX: 0,
         posZ: -120,
         scale: 1.3,
+        modelUrl: "/models/island.glb",
         isActive: true,
       },
     });
@@ -38,6 +39,7 @@ export async function POST() {
         posX: 200,
         posZ: -200,
         scale: 0.95,
+        modelUrl: "/models/island.glb",
         isActive: true,
       },
     });
@@ -48,6 +50,7 @@ export async function POST() {
         posX: -180,
         posZ: -220,
         scale: 1.0,
+        modelUrl: "/models/island.glb",
         isActive: true,
       },
     });
@@ -97,7 +100,7 @@ export async function POST() {
       data: {
         name: "Corsair Sloop",
         type: "ship",
-        modelUrl: "/models/ship-pirate-small.glb",
+        modelUrl: "/models/pirate-ship.glb",
         hitPoints: 3,
         cannonAccuracy: 0.45,
         difficulty: "easy",
@@ -119,7 +122,8 @@ export async function POST() {
       data: {
         name: "Dread Galleon",
         type: "ship",
-        modelUrl: "/models/ship-large.glb",
+        modelUrl: "/models/pirate-ship.glb",
+        modelScale: 1.3,
         hitPoints: 6,
         cannonAccuracy: 0.65,
         difficulty: "hard",

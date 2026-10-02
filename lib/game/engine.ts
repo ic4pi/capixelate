@@ -22,12 +22,9 @@ import type {
 // Used as defaults so the game looks like a pirate game out of the box —
 // no admin upload required. Individual entities can still override these
 // via `modelUrl` in the DB (set through the admin panel or seed).
-const DEFAULT_PLAYER_SHIP_MODEL = "/models/ship-pirate-medium.glb";
-const DEFAULT_ENEMY_SHIP_MODELS = [
-  "/models/ship-medium.glb",
-  "/models/ship-pirate-small.glb",
-  "/models/ship-large.glb",
-];
+const DEFAULT_PLAYER_SHIP_MODEL = "/models/early-ship.glb";
+const DEFAULT_ISLAND_MODEL = "/models/island.glb";
+const DEFAULT_ENEMY_SHIP_MODELS = ["/models/pirate-ship.glb"];
 const DEFAULT_MONSTER_MODEL = "/models/ship-ghost.glb";
 const ISLAND_PALM_MODELS = [
   "/models/palm-detailed-straight.glb",
@@ -124,11 +121,11 @@ export class GameEngine {
   private frameCount = 0;
   // GLTFLoader configured with DRACO + Meshopt decoders so it can load the
   // compressed .glb files emitted by `npm run compress-models`. Decoder WASM
-  // is fetched from Google's CDN (no files to bundle in the repo).
+  // is self-hosted in public/draco (copied from three/examples).
   private gltfLoader = (() => {
     const loader = new GLTFLoader();
     const draco = new DRACOLoader();
-    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    draco.setDecoderPath("/draco/");
     loader.setDRACOLoader(draco);
     loader.setMeshoptDecoder(MeshoptDecoder);
     return loader;
@@ -842,8 +839,9 @@ export class GameEngine {
     this.scene.add(group);
     this.islands.set(island.id, { group, state: island });
 
-    if (island.modelUrl) {
-      this.loadGLB(island.modelUrl)
+    const islandModelUrl = island.modelUrl || DEFAULT_ISLAND_MODEL;
+    {
+      this.loadGLB(islandModelUrl)
         .then((model) => {
           const existing = group.getObjectByName("terrain");
           if (existing) group.remove(existing);
@@ -857,7 +855,7 @@ export class GameEngine {
           group.add(model);
         })
         .catch((err) => {
-          console.error(`[game] Failed to load island model "${island.name}" from ${island.modelUrl}:`, err);
+          console.error(`[game] Failed to load island model "${island.name}" from ${islandModelUrl}:`, err);
         });
     }
   }
