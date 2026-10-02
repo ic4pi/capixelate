@@ -22,9 +22,9 @@ import type {
 // Used as defaults so the game looks like a pirate game out of the box —
 // no admin upload required. Individual entities can still override these
 // via `modelUrl` in the DB (set through the admin panel or seed).
-const DEFAULT_PLAYER_SHIP_MODEL = "/models/early-ship.glb";
+const DEFAULT_PLAYER_SHIP_MODEL = "/models/pirate-ship.glb";
 const DEFAULT_ISLAND_MODEL = "/models/island.glb";
-const DEFAULT_ENEMY_SHIP_MODELS = ["/models/pirate-ship.glb"];
+const DEFAULT_ENEMY_SHIP_MODELS = ["/models/historical-ship.glb"];
 const DEFAULT_MONSTER_MODEL = "/models/ship-ghost.glb";
 const ISLAND_PALM_MODELS = [
   "/models/palm-detailed-straight.glb",

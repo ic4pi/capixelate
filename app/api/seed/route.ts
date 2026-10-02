@@ -15,7 +15,7 @@ export async function POST() {
       data: {
         name: "The Black Barnacle",
         type: "player",
-        modelUrl: "/models/early-ship.glb",
+        modelUrl: "/models/pirate-ship.glb",
         isActive: true,
       },
     });
@@ -100,7 +100,7 @@ export async function POST() {
       data: {
         name: "Corsair Sloop",
         type: "ship",
-        modelUrl: "/models/pirate-ship.glb",
+        modelUrl: "/models/historical-ship.glb",
         hitPoints: 3,
         cannonAccuracy: 0.45,
         difficulty: "easy",
@@ -122,7 +122,7 @@ export async function POST() {
       data: {
         name: "Dread Galleon",
         type: "ship",
-        modelUrl: "/models/pirate-ship.glb",
+        modelUrl: "/models/historical-ship.glb",
         modelScale: 1.3,
         hitPoints: 6,
         cannonAccuracy: 0.65,
@@ -136,6 +136,29 @@ export async function POST() {
         zoneZ: -180,
         zoneRadius: 220,
         speed: 0.7,
+        spawnCount: 1,
+        isActive: true,
+      },
+    });
+
+    await prisma.enemy.create({
+      data: {
+        name: "Rogue Frigate",
+        type: "ship",
+        modelUrl: "/models/historical-ship.glb",
+        modelScale: 1.1,
+        hitPoints: 4,
+        cannonAccuracy: 0.55,
+        difficulty: "normal",
+        behavior: "fleeBeforeSink",
+        attackMode: "cannon",
+        fleeThreshold: 0.25,
+        lootValue: 150,
+        lootDifficulty: "normal",
+        zoneX: 0,
+        zoneZ: -320,
+        zoneRadius: 200,
+        speed: 0.8,
         spawnCount: 1,
         isActive: true,
       },

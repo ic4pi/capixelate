@@ -16,7 +16,7 @@ import sharp from "sharp";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const JOBS = [
-  { src: "early-ship.glb", out: "early-ship.glb", kind: "ship", size: 14, ratio: 0.1, bowSign: +1 },
+  { src: "historical-ship.glb", out: "historical-ship.glb", kind: "ship", size: 14, ratio: 0.1, bowSign: +1 },
   { src: "pirate-ship.glb", out: "pirate-ship.glb", kind: "ship", size: 14, ratio: 0.08, bowSign: +1 },
   { src: "island.glb", out: "island.glb", kind: "island", size: 150, ratio: 0.1, yBase: -4 },
 ];
