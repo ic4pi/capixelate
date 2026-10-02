@@ -18,6 +18,9 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const JOBS = [
   { src: "historical-ship.glb", out: "historical-ship.glb", kind: "ship", size: 14, ratio: 0.1, bowSign: +1 },
   { src: "pirate-ship.glb", out: "pirate-ship.glb", kind: "ship", size: 14, ratio: 0.08, bowSign: +1 },
+  { src: "small-ship.glb", out: "small-ship.glb", kind: "ship", size: 11, ratio: 0.5, bowSign: -1 },
+  { src: "cargo-ship.glb", out: "cargo-ship.glb", kind: "ship", size: 16, ratio: 0.8, bowSign: -1 },
+  { src: "kraken.glb", out: "kraken.glb", kind: "ship", size: 20, ratio: 0.6, bowSign: +1 },
   { src: "island.glb", out: "island.glb", kind: "island", size: 150, ratio: 0.1, yBase: -4 },
 ];
 const only = process.argv[2];

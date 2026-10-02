@@ -100,7 +100,7 @@ export async function POST() {
       data: {
         name: "Corsair Sloop",
         type: "ship",
-        modelUrl: "/models/historical-ship.glb",
+        modelUrl: "/models/small-ship.glb",
         hitPoints: 3,
         cannonAccuracy: 0.45,
         difficulty: "easy",
@@ -145,7 +145,7 @@ export async function POST() {
       data: {
         name: "Rogue Frigate",
         type: "ship",
-        modelUrl: "/models/historical-ship.glb",
+        modelUrl: "/models/cargo-ship.glb",
         modelScale: 1.1,
         hitPoints: 4,
         cannonAccuracy: 0.55,
@@ -168,7 +168,8 @@ export async function POST() {
       data: {
         name: "Kraken",
         type: "monster",
-        modelUrl: "/models/ship-ghost.glb",
+        modelUrl: "/models/kraken.glb",
+        modelYOffset: -4,
         hitPoints: 10,
         cannonAccuracy: 0.8,
         difficulty: "legendary",
@@ -190,7 +191,9 @@ export async function POST() {
       data: {
         name: "Sea Serpent",
         type: "monster",
-        modelUrl: "/models/ship-ghost.glb",
+        modelUrl: "/models/kraken.glb",
+        modelScale: 0.7,
+        modelYOffset: -3,
         hitPoints: 7,
         cannonAccuracy: 0.6,
         difficulty: "hard",

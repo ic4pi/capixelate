@@ -24,8 +24,12 @@ import type {
 // via `modelUrl` in the DB (set through the admin panel or seed).
 const DEFAULT_PLAYER_SHIP_MODEL = "/models/pirate-ship.glb";
 const DEFAULT_ISLAND_MODEL = "/models/island.glb";
-const DEFAULT_ENEMY_SHIP_MODELS = ["/models/historical-ship.glb"];
-const DEFAULT_MONSTER_MODEL = "/models/ship-ghost.glb";
+const DEFAULT_ENEMY_SHIP_MODELS = [
+  "/models/historical-ship.glb",
+  "/models/small-ship.glb",
+  "/models/cargo-ship.glb",
+];
+const DEFAULT_MONSTER_MODEL = "/models/kraken.glb";
 const ISLAND_PALM_MODELS = [
   "/models/palm-detailed-straight.glb",
   "/models/palm-detailed-bend.glb",
@@ -1082,7 +1086,7 @@ export class GameEngine {
           yOffset: enemy.modelYOffset,
         });
         // Ghost ships (used for sea monsters) — tint blue-green + translucent
-        if (enemyModelUrl === DEFAULT_MONSTER_MODEL) {
+        if (enemyModelUrl === "/models/ship-ghost.glb") {
           model.traverse((obj) => {
             const mesh = obj as THREE.Mesh;
             if (mesh.isMesh && mesh.material) {
